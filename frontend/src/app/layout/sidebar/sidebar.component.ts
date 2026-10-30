@@ -144,6 +144,26 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
             <span>Audit History</span>
           </a>
         </div>
+
+        <!-- Section 5 -->
+        <div class="nav-section">
+          <span class="section-title">GUIDE &amp; DOCS</span>
+          <a routerLink="/docs" class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+            </svg>
+            <span>Platform Guide</span>
+          </a>
+          <a href="http://localhost:8085/swagger-ui/index.html" target="_blank" class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+            <span>OpenAPI Swagger ↗</span>
+          </a>
+        </div>
       </nav>
     </aside>
   `,

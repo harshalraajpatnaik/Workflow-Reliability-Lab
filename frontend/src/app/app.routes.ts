@@ -31,6 +31,28 @@ export const routes: Routes = [
     path: 'docs',
     loadComponent: () => import('./pages/docs/docs.component').then(m => m.DocsComponent)
   },
+  {
+    path: 'guide',
+    redirectTo: 'docs',
+    pathMatch: 'full'
+  },
+
+  // Direct Shortcut Aliases to Workspace Modules
+  { path: 'dashboard', redirectTo: 'workspace/dashboard', pathMatch: 'full' },
+  { path: 'projects', redirectTo: 'workspace/projects', pathMatch: 'full' },
+  { path: 'executions', redirectTo: 'workspace/executions', pathMatch: 'full' },
+  { path: 'events', redirectTo: 'workspace/events', pathMatch: 'full' },
+  { path: 'traces', redirectTo: 'workspace/traces', pathMatch: 'full' },
+  { path: 'anomalies', redirectTo: 'workspace/anomalies', pathMatch: 'full' },
+  { path: 'scenarios', redirectTo: 'workspace/scenarios', pathMatch: 'full' },
+  { path: 'invariants', redirectTo: 'workspace/invariants', pathMatch: 'full' },
+  { path: 'payments', redirectTo: 'workspace/payments', pathMatch: 'full' },
+  { path: 'incidents', redirectTo: 'workspace/incidents', pathMatch: 'full' },
+  { path: 'integrations', redirectTo: 'workspace/integrations', pathMatch: 'full' },
+  { path: 'api-keys', redirectTo: 'workspace/api-keys', pathMatch: 'full' },
+  { path: 'webhooks', redirectTo: 'workspace/webhooks', pathMatch: 'full' },
+  { path: 'team', redirectTo: 'workspace/team', pathMatch: 'full' },
+  { path: 'audit', redirectTo: 'workspace/audit', pathMatch: 'full' },
 
   // Authenticated Workspace Routes
   {

@@ -64,7 +64,7 @@ import { InvariantDefinition, InvariantResult } from '../../core/models/models';
                   </span>
                 </td>
                 <td class="font-mono font-bold">{{ res.invariantCode }}</td>
-                <td>{{ res.message }}</td>
+                <td>{{ res.violationMessage || (res.passed ? 'Satisfied — No invariant violations detected' : 'Rule Violation Detected') }}</td>
                 <td class="font-mono text-xs">
                   <a [routerLink]="['/workspace/executions', res.executionId]" class="link">
                     {{ res.executionId.substring(0, 8) }}... ↗

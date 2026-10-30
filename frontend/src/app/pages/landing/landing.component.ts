@@ -207,6 +207,109 @@ import { AuthService } from '../../core/services/auth.service';
         </div>
       </section>
 
+      <!-- Invariants Highlight -->
+      <section id="invariants" class="invariants-section">
+        <div class="container">
+          <div class="section-heading text-center">
+            <span class="badge badge-purple">DETERMINISTIC INVARIANTS</span>
+            <h2>8 Mathematical Business Rules Verified in Real-Time</h2>
+            <p>Non-negotiable correctness rules verified automatically across every execution journal.</p>
+          </div>
+
+          <div class="invariants-grid">
+            <div class="inv-card">
+              <div class="inv-header">
+                <span class="inv-code font-mono">INV_NO_DOUBLE_CHARGE</span>
+                <span class="inv-badge green">CRITICAL</span>
+              </div>
+              <h4 class="inv-title">Zero Double-Charge Guarantee</h4>
+              <p class="inv-desc">Guarantees that a customer is never billed more than once for a single checkout session, even under duplicate event replays.</p>
+              <div class="inv-formula font-mono">&sum; ChargeEvents(e) &le; 1</div>
+            </div>
+
+            <div class="inv-card">
+              <div class="inv-header">
+                <span class="inv-code font-mono">INV_REFUND_CEILING</span>
+                <span class="inv-badge green">CRITICAL</span>
+              </div>
+              <h4 class="inv-title">Refund Ceiling Enforcement</h4>
+              <p class="inv-desc">Mathematical assertion ensuring total refunded capital never exceeds the actual captured transaction amount.</p>
+              <div class="inv-formula font-mono">&sum; Refunds &le; &sum; Captured</div>
+            </div>
+
+            <div class="inv-card">
+              <div class="inv-header">
+                <span class="inv-code font-mono">INV_NO_DUP_TRANSITION</span>
+                <span class="inv-badge purple">HIGH</span>
+              </div>
+              <h4 class="inv-title">State Transition Uniqueness</h4>
+              <p class="inv-desc">Prevents duplicate state transitions on non-retry operations, catching missing consumer deduplication.</p>
+              <div class="inv-formula font-mono">Count(Transition(s₁ &rarr; s₂)) &le; 1</div>
+            </div>
+
+            <div class="inv-card">
+              <div class="inv-header">
+                <span class="inv-code font-mono">INV_TERMINAL_IMMUTABILITY</span>
+                <span class="inv-badge blue">STRICT</span>
+              </div>
+              <h4 class="inv-title">Terminal State Immutability</h4>
+              <p class="inv-desc">Once a workflow reaches COMPLETED, CANCELLED, or FAILED, subsequent state mutation attempts are rejected.</p>
+              <div class="inv-formula font-mono">&forall; t &gt; t_term, &Delta;State = &empty;</div>
+            </div>
+
+            <div class="inv-card">
+              <div class="inv-header">
+                <span class="inv-code font-mono">INV_COMPENSATION_LOGGED</span>
+                <span class="inv-badge yellow">RECOVERY</span>
+              </div>
+              <h4 class="inv-title">Saga Rollback Audit Trail</h4>
+              <p class="inv-desc">Every failed distributed orchestration must record explicit compensating events for all completed forward steps.</p>
+              <div class="inv-formula font-mono">Failed &rArr; Logged(Compensate)</div>
+            </div>
+
+            <div class="inv-card">
+              <div class="inv-header">
+                <span class="inv-code font-mono">INV_JOURNAL_MATCH</span>
+                <span class="inv-badge cyan">CONSISTENCY</span>
+              </div>
+              <h4 class="inv-title">State Journal Consistency</h4>
+              <p class="inv-desc">The top-level workflow engine status must exactly match the terminal status of the last timeline event.</p>
+              <div class="inv-formula font-mono">Terminal(Exec) &equiv; LastEvent</div>
+            </div>
+
+            <div class="inv-card">
+              <div class="inv-header">
+                <span class="inv-code font-mono">INV_RECONCILIATION_BAL</span>
+                <span class="inv-badge green">LEDGER</span>
+              </div>
+              <h4 class="inv-title">Ledger Parity &amp; Reconciliation</h4>
+              <p class="inv-desc">Internal system ledger debits must strictly equal provider charge settlement amounts with zero discrepancy.</p>
+              <div class="inv-formula font-mono">Ledger(Net) == Provider(Net)</div>
+            </div>
+
+            <div class="inv-card">
+              <div class="inv-header">
+                <span class="inv-code font-mono">INV_REQUIRED_STEPS</span>
+                <span class="inv-badge blue">SEQUENCE</span>
+              </div>
+              <h4 class="inv-title">Mandatory Lifecycle Sequence</h4>
+              <p class="inv-desc">Workflows marked COMPLETED must satisfy all required domain lifecycle steps in forward chronological order.</p>
+              <div class="inv-formula font-mono">Steps(e) &supe; &#123;Created, Paid, Final&#125;</div>
+            </div>
+          </div>
+
+          <div class="invariants-cta text-center">
+            <a routerLink="/workspace/invariants" class="btn btn-primary btn-md">
+              <span>Inspect Live Invariants in Console</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </a>
+            <a routerLink="/docs" class="btn btn-secondary btn-md">Explore Platform Guide &amp; FAQs</a>
+          </div>
+        </div>
+      </section>
+
       <!-- Footer -->
       <footer class="landing-footer">
         <div class="container footer-content">
@@ -489,6 +592,87 @@ import { AuthService } from '../../core/services/auth.service';
       font-size: 0.95rem;
       font-weight: 500;
       color: var(--text-primary);
+    }
+    .invariants-section {
+      padding: 5rem 0;
+      background: radial-gradient(circle at center, rgba(168, 85, 247, 0.05) 0%, transparent 70%);
+      border-top: 1px solid var(--border);
+    }
+    .badge-purple {
+      background: rgba(168, 85, 247, 0.15);
+      color: #c084fc;
+      border: 1px solid rgba(168, 85, 247, 0.3);
+    }
+    .invariants-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2.5rem;
+    }
+    .inv-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .inv-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(168, 85, 247, 0.4);
+    }
+    .inv-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .inv-code {
+      font-size: 0.75rem;
+      color: var(--accent-purple);
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    .inv-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.2rem 0.5rem;
+      border-radius: var(--radius-full);
+      text-transform: uppercase;
+    }
+    .inv-badge.green { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+    .inv-badge.purple { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+    .inv-badge.blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+    .inv-badge.yellow { background: rgba(234, 179, 8, 0.15); color: #facc15; }
+    .inv-badge.cyan { background: rgba(6, 182, 212, 0.15); color: #22d3ee; }
+    .inv-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 0;
+    }
+    .inv-desc {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin: 0;
+      flex: 1;
+    }
+    .inv-formula {
+      font-size: 0.8rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-sm);
+      border-left: 3px solid var(--accent-purple);
+      color: var(--accent-cyan);
+    }
+    .invariants-cta {
+      margin-top: 3rem;
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
     }
     .landing-footer {
       border-top: 1px solid var(--border);
