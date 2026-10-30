@@ -41,6 +41,10 @@ export class ApiService {
     return this.http.delete<ApiResponse<void>>(`${this.baseUrl}/workspaces/${wsId}/members/${userId}`);
   }
 
+  updateMemberRole(wsId: string, userId: string, role: string): Observable<ApiResponse<void>> {
+    return this.http.patch<ApiResponse<void>>(`${this.baseUrl}/workspaces/${wsId}/members/${userId}`, { role });
+  }
+
   // Projects & Environments
   getProjects(wsId: string): Observable<ApiResponse<Project[]>> {
     return this.http.get<ApiResponse<Project[]>>(`${this.baseUrl}/workspaces/${wsId}/projects`);

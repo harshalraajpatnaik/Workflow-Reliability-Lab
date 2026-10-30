@@ -48,12 +48,12 @@ import { Project, Environment } from '../../core/models/models';
                 <div class="env-top">
                   <span class="env-name">{{ env.name }}</span>
                   <span class="badge" [ngClass]="{
-                    'badge-danger': env.type === 'PRODUCTION',
-                    'badge-warning': env.type === 'STAGING',
-                    'badge-info': env.type === 'DEVELOPMENT',
-                    'badge-primary': env.type === 'SIMULATION'
+                    'badge-danger': (env.environmentType || env.type) === 'PRODUCTION',
+                    'badge-warning': (env.environmentType || env.type) === 'STAGING',
+                    'badge-info': (env.environmentType || env.type) === 'DEVELOPMENT',
+                    'badge-primary': (env.environmentType || env.type) === 'SIMULATION'
                   }">
-                    {{ env.type }}
+                    {{ env.environmentType || env.type }}
                   </span>
                 </div>
                 <div class="env-id font-mono text-xs text-muted">ID: {{ env.id }}</div>

@@ -15,6 +15,7 @@ import com.workflowlab.workspace.repository.WorkspaceRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,17 +26,20 @@ public class WorkspaceService {
     private final WorkspaceMemberRepository memberRepository;
     private final UserRepository userRepository;
     private final AuditService auditService;
+    private final PasswordEncoder passwordEncoder;
 
     public WorkspaceService(
         WorkspaceRepository workspaceRepository,
         WorkspaceMemberRepository memberRepository,
         UserRepository userRepository,
-        AuditService auditService
+        AuditService auditService,
+        PasswordEncoder passwordEncoder
     ) {
         this.workspaceRepository = workspaceRepository;
         this.memberRepository = memberRepository;
         this.userRepository = userRepository;
         this.auditService = auditService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional(readOnly = true)
@@ -129,8 +133,15 @@ public class WorkspaceService {
     public WorkspaceMemberDto inviteMember(UUID workspaceId, InviteMemberRequest request, UUID requestingUserId) {
         assertAdminOrOwner(workspaceId, requestingUserId);
 
-        User invitee = userRepository.findByEmailIgnoreCase(request.email().trim())
-            .orElseThrow(() -> new ResourceNotFoundException("No user found with email " + request.email()));
+        String email = request.email().trim().toLowerCase();
+        User invitee = userRepository.findByEmailIgnoreCase(email)
+            .orElseGet(() -> {
+                String prefix = email.split("@")[0];
+                String name = Character.toUpperCase(prefix.charAt(0)) + prefix.substring(1);
+                User newUser = new User(email, passwordEncoder.encode(UUID.randomUUID().toString()), name);
+                newUser.setEmailVerified(false);
+                return userRepository.save(newUser);
+            });
 
         if (memberRepository.existsByWorkspaceIdAndUserId(workspaceId, invitee.getId())) {
             throw new ConflictException("User is already a member of this workspace");

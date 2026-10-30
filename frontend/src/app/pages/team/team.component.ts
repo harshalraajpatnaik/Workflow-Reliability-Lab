@@ -43,23 +43,25 @@ import { WorkspaceMember } from '../../core/models/models';
                 <td class="font-medium">
                   <div class="member-cell">
                     <div class="avatar-small">
-                      {{ m.user ? (m.user.fullName ? m.user.fullName[0].toUpperCase() : 'U') : 'U' }}
+                      {{ (m.fullName || m.email || 'U')[0].toUpperCase() }}
                     </div>
-                    <span>{{ m.user?.fullName || 'Active Member' }}</span>
+                    <span>{{ m.fullName || m.email || 'Active Member' }}</span>
                   </div>
                 </td>
-                <td class="font-mono text-xs">{{ m.user?.email || '-' }}</td>
+                <td class="font-mono text-xs">{{ m.email || '-' }}</td>
                 <td>
-                  <span class="badge" [ngClass]="{
-                    'badge-danger': m.role === 'OWNER',
-                    'badge-warning': m.role === 'ADMIN',
-                    'badge-info': m.role === 'DEVELOPER',
-                    'badge-primary': m.role === 'VIEWER'
-                  }">
-                    {{ m.role }}
-                  </span>
+                  <span *ngIf="m.role === 'OWNER'" class="badge badge-danger">OWNER</span>
+                  <select 
+                    *ngIf="m.role !== 'OWNER'" 
+                    class="role-select" 
+                    [ngModel]="m.role" 
+                    (ngModelChange)="onRoleChange(m.userId, $event)">
+                    <option value="ADMIN">ADMIN</option>
+                    <option value="DEVELOPER">DEVELOPER</option>
+                    <option value="VIEWER">VIEWER</option>
+                  </select>
                 </td>
-                <td class="text-xs text-muted">{{ m.createdAt | date:'medium' }}</td>
+                <td class="text-xs text-muted">{{ m.joinedAt || m.createdAt | date:'medium' }}</td>
                 <td>
                   <button 
                     *ngIf="m.role !== 'OWNER' && m.userId" 
@@ -234,6 +236,15 @@ import { WorkspaceMember } from '../../core/models/models';
       gap: 0.75rem;
       margin-top: 1rem;
     }
+    .role-select {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      font-weight: 600;
+    }
   `]
 })
 export class TeamComponent implements OnInit {
@@ -299,5 +310,16 @@ export class TeamComponent implements OnInit {
         }
       });
     }
+  }
+
+  onRoleChange(userId: string, newRole: string) {
+    const ws = this.workspaceService.currentWorkspace();
+    if (!ws) return;
+
+    this.api.updateMemberRole(ws.id, userId, newRole).subscribe({
+      next: () => {
+        this.loadMembers(ws.id);
+      }
+    });
   }
 }

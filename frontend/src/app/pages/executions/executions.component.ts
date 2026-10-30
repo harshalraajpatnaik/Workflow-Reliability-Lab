@@ -1,10 +1,10 @@
-import { Component, OnInit, inject, signal, effect } from '@angular/core';
+import { Component, OnInit, inject, signal, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
 import { WorkspaceService } from '../../core/services/workspace.service';
-import { Execution } from '../../core/models/models';
+import { Execution, Environment } from '../../core/models/models';
 
 @Component({
   selector: 'app-executions',
@@ -38,6 +38,14 @@ import { Execution } from '../../core/models/models';
             (ngModelChange)="onSearchChange()"
           />
         </div>
+        <div class="env-filter-box">
+          <select class="form-control env-select" [(ngModel)]="selectedEnvId" (ngModelChange)="onEnvChange()">
+            <option value="">All Environments</option>
+            <option *ngFor="let env of allEnvironments()" [value]="env.id">
+              {{ env.name }} ({{ env.environmentType || env.type }})
+            </option>
+          </select>
+        </div>
         <div class="status-filters">
           <button 
             *ngFor="let s of statuses" 
@@ -57,6 +65,7 @@ import { Execution } from '../../core/models/models';
               <tr>
                 <th>Status</th>
                 <th>Workflow Name</th>
+                <th>Environment</th>
                 <th>Correlation ID</th>
                 <th>Trigger Source</th>
                 <th>Duration</th>
@@ -80,6 +89,11 @@ import { Execution } from '../../core/models/models';
                   <a [routerLink]="['/workspace/executions', exec.id]" class="exec-link">
                     {{ exec.workflowName }}
                   </a>
+                </td>
+                <td>
+                  <span class="badge" [ngClass]="getEnvBadgeClass(exec.environmentId)">
+                    {{ getEnvName(exec.environmentId) }}
+                  </span>
                 </td>
                 <td class="font-mono text-muted text-xs">{{ exec.correlationId || '-' }}</td>
                 <td><span class="badge badge-info text-xs">{{ exec.triggerSource }}</span></td>
@@ -149,7 +163,14 @@ import { Execution } from '../../core/models/models';
     }
     .search-box {
       flex: 1;
-      min-width: 280px;
+      min-width: 240px;
+    }
+    .env-filter-box {
+      min-width: 180px;
+    }
+    .env-select {
+      font-size: 0.825rem;
+      padding: 0.45rem 0.75rem;
     }
     .status-filters {
       display: flex;
@@ -236,6 +257,11 @@ export class ExecutionsComponent implements OnInit {
   totalPages = signal(0);
   searchQuery = '';
   selectedStatus = '';
+  selectedEnvId = '';
+
+  allEnvironments = computed(() => {
+    return this.workspaceService.projects().flatMap(p => p.environments || []);
+  });
 
   statuses = [
     { label: 'All Statuses', value: '' },
@@ -266,6 +292,7 @@ export class ExecutionsComponent implements OnInit {
     if (!ws) return;
 
     this.api.getExecutions(ws.id, {
+      environmentId: this.selectedEnvId || undefined,
       status: this.selectedStatus || undefined,
       search: this.searchQuery || undefined,
       page: this.page(),
@@ -284,6 +311,11 @@ export class ExecutionsComponent implements OnInit {
     this.loadExecutions();
   }
 
+  onEnvChange() {
+    this.page.set(0);
+    this.loadExecutions();
+  }
+
   onSearchChange() {
     this.page.set(0);
     this.loadExecutions();
@@ -292,6 +324,25 @@ export class ExecutionsComponent implements OnInit {
   changePage(newPage: number) {
     this.page.set(newPage);
     this.loadExecutions();
+  }
+
+  getEnvName(envId?: string): string {
+    if (!envId) return 'Simulation';
+    const env = this.allEnvironments().find(e => e.id === envId);
+    return env ? env.name : 'Simulation';
+  }
+
+  getEnvBadgeClass(envId?: string): string {
+    if (!envId) return 'badge-primary';
+    const env = this.allEnvironments().find(e => e.id === envId);
+    if (!env) return 'badge-primary';
+    const type = env.environmentType || env.type;
+    switch (type) {
+      case 'PRODUCTION': return 'badge-danger';
+      case 'STAGING': return 'badge-warning';
+      case 'DEVELOPMENT': return 'badge-info';
+      default: return 'badge-primary';
+    }
   }
 
   formatDuration(ms?: number): string {
