@@ -104,4 +104,11 @@ public class Span {
     public Instant getEndedAt() { return endedAt; }
     public Long getDurationMs() { return durationMs; }
     public Instant getCreatedAt() { return createdAt; }
+
+    public void setStatusCode(String statusCode) { this.statusCode = statusCode; }
+    public void setStatusMessage(String statusMessage) { this.statusMessage = statusMessage; }
+    public void setAttributes(String attributes) { this.attributes = attributes; }
+    public void setStartedAt(Instant startedAt) { this.startedAt = startedAt; }
+    public void setEndedAt(Instant endedAt) { this.endedAt = endedAt; }
+    public void setDurationMs(Long durationMs) { this.durationMs = durationMs; }
 }

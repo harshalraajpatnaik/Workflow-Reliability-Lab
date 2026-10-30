@@ -28,13 +28,16 @@ public class NoDuplicateTransitionCheck implements InvariantCheck {
         }
 
         if (!duplicates.isEmpty()) {
+            String jsonArray = duplicates.stream()
+                .map(d -> "\"" + d.replace("\"", "\\\"") + "\"")
+                .collect(java.util.stream.Collectors.joining(",", "[", "]"));
             return new InvariantResult(
                 execution.getWorkspaceId(),
                 def.getId(),
                 execution.getId(),
                 false,
                 "Duplicate state transitions detected for: " + duplicates,
-                String.format("{\"duplicateTransitions\": %s}", duplicates)
+                String.format("{\"duplicateTransitions\": %s}", jsonArray)
             );
         }
 

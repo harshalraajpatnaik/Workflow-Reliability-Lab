@@ -38,17 +38,14 @@ public class ScenarioService {
     }
 
     @Transactional(readOnly = true)
-    public ScenarioDto getScenario(UUID scenarioId) {
-        Scenario scenario = scenarioRepository.findById(scenarioId)
-            .orElseThrow(() -> new ResourceNotFoundException("Scenario not found"));
+    public ScenarioDto getScenario(String scenarioIdentifier) {
+        Scenario scenario = resolveScenario(scenarioIdentifier);
         return ScenarioDto.from(scenario);
     }
 
     @Transactional
-    public ScenarioRunDto runScenario(UUID workspaceId, UUID scenarioId, RunScenarioRequest request, UUID userId) {
-        Scenario scenario = scenarioRepository.findById(scenarioId)
-            .orElseThrow(() -> new ResourceNotFoundException("Scenario not found"));
-
+    public ScenarioRunDto runScenario(UUID workspaceId, String scenarioIdentifier, RunScenarioRequest request, UUID userId) {
+        Scenario scenario = resolveScenario(scenarioIdentifier);
         return simulationEngine.executeScenario(workspaceId, scenario, request.environmentId(), userId, request.customFaultConfig());
     }
 
@@ -58,10 +55,15 @@ public class ScenarioService {
         return PageResponse.from(page.map(ScenarioRunDto::from));
     }
 
-    @Transactional(readOnly = true)
-    public ScenarioRunDto getScenarioRun(UUID workspaceId, UUID runId) {
-        ScenarioRun run = scenarioRunRepository.findByIdAndWorkspaceId(runId, workspaceId)
-            .orElseThrow(() -> new ResourceNotFoundException("Scenario run not found"));
-        return ScenarioRunDto.from(run);
+    private Scenario resolveScenario(String identifier) {
+        try {
+            UUID id = UUID.fromString(identifier);
+            return scenarioRepository.findById(id)
+                .or(() -> scenarioRepository.findByCode(identifier))
+                .orElseThrow(() -> new ResourceNotFoundException("Scenario not found with ID or code: " + identifier));
+        } catch (IllegalArgumentException e) {
+            return scenarioRepository.findByCode(identifier)
+                .orElseThrow(() -> new ResourceNotFoundException("Scenario not found with code: " + identifier));
+        }
     }
 }

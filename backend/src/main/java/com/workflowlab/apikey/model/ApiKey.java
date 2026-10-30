@@ -75,6 +75,10 @@ public class ApiKey {
         this.revoked = revoked;
         if (revoked) this.revokedAt = Instant.now();
     }
+    public void revoke() {
+        this.revoked = true;
+        this.revokedAt = Instant.now();
+    }
     public Instant getRevokedAt() { return revokedAt; }
     public Instant getCreatedAt() { return createdAt; }
 

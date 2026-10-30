@@ -36,6 +36,32 @@ public final class TraceDtos {
         Instant endedAt
     ) {}
 
+    public record SingleSpanIngestRequest(
+        @NotBlank(message = "Trace ID is required")
+        String traceId,
+
+        UUID executionId,
+
+        @NotBlank(message = "Span ID is required")
+        String spanId,
+
+        String parentSpanId,
+
+        @NotBlank(message = "Service name is required")
+        String serviceName,
+
+        String name,
+        String operationName,
+        String spanKind,
+        String statusCode,
+        String statusMessage,
+        String attributes,
+        Long startTimeUs,
+        Long endTimeUs,
+        Instant startedAt,
+        Instant endedAt
+    ) {}
+
     public record IngestTraceRequest(
         @NotBlank(message = "Trace ID is required")
         String traceId,
@@ -48,7 +74,7 @@ public final class TraceDtos {
         @NotBlank(message = "Root operation is required")
         String rootOperation,
 
-        @NotEmpty(message = "At least one span is required")
+        @NotEmpty(message = "At least one span must be provided")
         List<IngestSpanRequest> spans
     ) {}
 
@@ -64,22 +90,22 @@ public final class TraceDtos {
         String attributes,
         Instant startedAt,
         Instant endedAt,
-        Long durationMs
+        long durationMs
     ) {
-        public static SpanDto from(Span s) {
+        public static SpanDto from(Span span) {
             return new SpanDto(
-                s.getId(),
-                s.getSpanId(),
-                s.getParentSpanId(),
-                s.getServiceName(),
-                s.getOperationName(),
-                s.getSpanKind(),
-                s.getStatusCode(),
-                s.getStatusMessage(),
-                s.getAttributes(),
-                s.getStartedAt(),
-                s.getEndedAt(),
-                s.getDurationMs()
+                span.getId(),
+                span.getSpanId(),
+                span.getParentSpanId(),
+                span.getServiceName(),
+                span.getOperationName(),
+                span.getSpanKind(),
+                span.getStatusCode(),
+                span.getStatusMessage(),
+                span.getAttributes(),
+                span.getStartedAt(),
+                span.getEndedAt(),
+                span.getDurationMs()
             );
         }
     }
@@ -97,37 +123,24 @@ public final class TraceDtos {
         boolean hasErrors,
         List<SpanDto> spans
     ) {
-        public static TraceDetailDto from(Trace t, List<SpanDto> spans) {
+        public static TraceDetailDto from(Trace trace, List<SpanDto> spans) {
             return new TraceDetailDto(
-                t.getId(),
-                t.getWorkspaceId(),
-                t.getExecutionId(),
-                t.getTraceId(),
-                t.getRootService(),
-                t.getRootOperation(),
-                t.getStartedAt(),
-                t.getEndedAt(),
-                t.getDurationMs(),
-                t.isHasErrors(),
+                trace.getId(),
+                trace.getWorkspaceId(),
+                trace.getExecutionId(),
+                trace.getTraceId(),
+                trace.getRootService(),
+                trace.getRootOperation(),
+                trace.getStartedAt(),
+                trace.getEndedAt(),
+                trace.getDurationMs(),
+                trace.isHasErrors(),
                 spans
             );
         }
     }
 
-    public record ServiceDependencyNode(
-        String service,
-        int callCount,
-        int errorCount
-    ) {}
-
-    public record ServiceDependencyEdge(
-        String fromService,
-        String toService,
-        int callCount
-    ) {}
-
-    public record ServiceGraphDto(
-        List<ServiceDependencyNode> nodes,
-        List<ServiceDependencyEdge> edges
-    ) {}
+    public record ServiceNodeDto(String service, long callCount, long errorCount) {}
+    public record ServiceEdgeDto(String fromService, String toService, long callCount) {}
+    public record ServiceGraphDto(List<ServiceNodeDto> nodes, List<ServiceEdgeDto> edges) {}
 }

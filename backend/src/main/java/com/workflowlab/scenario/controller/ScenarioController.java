@@ -34,30 +34,30 @@ public class ScenarioController {
     }
 
     @GetMapping("/{scenarioId}")
-    @Operation(summary = "Get failure scenario details by ID")
+    @Operation(summary = "Get failure scenario details by ID or code")
     public ResponseEntity<ApiResponse<ScenarioDto>> getScenario(
         @PathVariable UUID workspaceId,
-        @PathVariable UUID scenarioId
+        @PathVariable String scenarioId
     ) {
         ScenarioDto scenario = scenarioService.getScenario(scenarioId);
         return ResponseEntity.ok(ApiResponse.ok(scenario));
     }
 
     @PostMapping("/{scenarioId}/run")
-    @Operation(summary = "Execute an isolated failure simulation run")
+    @Operation(summary = "Execute an isolated failure simulation run by scenario ID or code")
     public ResponseEntity<ApiResponse<ScenarioRunDto>> runScenario(
         @PathVariable UUID workspaceId,
-        @PathVariable UUID scenarioId,
+        @PathVariable String scenarioId,
         @Valid @RequestBody RunScenarioRequest request,
         @AuthenticationPrincipal UserPrincipal principal
     ) {
         UUID userId = principal != null ? principal.getId() : null;
         ScenarioRunDto run = scenarioService.runScenario(workspaceId, scenarioId, request, userId);
-        return ResponseEntity.ok(ApiResponse.ok("Simulation scenario executed", run));
+        return ResponseEntity.ok(ApiResponse.ok("Failure scenario executed successfully", run));
     }
 
     @GetMapping("/runs")
-    @Operation(summary = "List history of scenario simulation runs")
+    @Operation(summary = "List simulation execution history with pagination")
     public ResponseEntity<ApiResponse<PageResponse<ScenarioRunDto>>> listRuns(
         @PathVariable UUID workspaceId,
         @RequestParam(defaultValue = "0") int page,
@@ -66,15 +66,5 @@ public class ScenarioController {
         PageRequest pageRequest = PageRequest.of(page, Math.min(size, 100));
         PageResponse<ScenarioRunDto> runs = scenarioService.listScenarioRuns(workspaceId, pageRequest);
         return ResponseEntity.ok(ApiResponse.ok(runs));
-    }
-
-    @GetMapping("/runs/{runId}")
-    @Operation(summary = "Get details of a specific scenario run")
-    public ResponseEntity<ApiResponse<ScenarioRunDto>> getRun(
-        @PathVariable UUID workspaceId,
-        @PathVariable UUID runId
-    ) {
-        ScenarioRunDto run = scenarioService.getScenarioRun(workspaceId, runId);
-        return ResponseEntity.ok(ApiResponse.ok(run));
     }
 }

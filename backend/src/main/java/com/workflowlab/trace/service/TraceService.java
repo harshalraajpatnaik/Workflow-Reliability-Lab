@@ -26,6 +26,36 @@ public class TraceService {
     }
 
     @Transactional
+    public TraceDetailDto ingestSingleSpan(UUID workspaceId, SingleSpanIngestRequest req) {
+        String operation = req.operationName() != null ? req.operationName() : (req.name() != null ? req.name() : "operation");
+        Instant start = req.startedAt() != null ? req.startedAt() : (req.startTimeUs() != null ? Instant.ofEpochMilli(req.startTimeUs() / 1000) : Instant.now());
+        Instant end = req.endedAt() != null ? req.endedAt() : (req.endTimeUs() != null ? Instant.ofEpochMilli(req.endTimeUs() / 1000) : start.plusMillis(50));
+
+        IngestSpanRequest spanReq = new IngestSpanRequest(
+            req.spanId(),
+            req.parentSpanId(),
+            req.serviceName(),
+            operation,
+            req.spanKind() != null ? req.spanKind() : "INTERNAL",
+            req.statusCode() != null ? req.statusCode() : "OK",
+            req.statusMessage(),
+            req.attributes(),
+            start,
+            end
+        );
+
+        IngestTraceRequest traceReq = new IngestTraceRequest(
+            req.traceId(),
+            req.executionId(),
+            req.serviceName(),
+            operation,
+            List.of(spanReq)
+        );
+
+        return ingestTrace(workspaceId, traceReq);
+    }
+
+    @Transactional
     public TraceDetailDto ingestTrace(UUID workspaceId, IngestTraceRequest request) {
         Optional<Trace> existingTrace = traceRepository.findByWorkspaceIdAndTraceId(workspaceId, request.traceId());
 
@@ -49,30 +79,44 @@ public class TraceService {
             trace = traceRepository.save(trace);
         }
 
-        boolean anyError = false;
+        boolean anyError = trace.isHasErrors();
         Instant latestEnd = trace.getEndedAt();
 
         for (IngestSpanRequest sr : request.spans()) {
             boolean isError = "ERROR".equalsIgnoreCase(sr.statusCode());
             if (isError) anyError = true;
 
-            if (latestEnd == null || sr.endedAt().isAfter(latestEnd)) {
+            if (latestEnd == null || (sr.endedAt() != null && sr.endedAt().isAfter(latestEnd))) {
                 latestEnd = sr.endedAt();
             }
 
-            Span span = new Span(
-                trace.getId(),
-                sr.spanId(),
-                sr.parentSpanId(),
-                sr.serviceName(),
-                sr.operationName(),
-                sr.spanKind(),
-                sr.statusCode(),
-                sr.statusMessage(),
-                sr.attributes(),
-                sr.startedAt(),
-                sr.endedAt()
-            );
+            Optional<Span> existingSpan = spanRepository.findByTraceIdAndSpanId(trace.getId(), sr.spanId());
+            Span span;
+            if (existingSpan.isPresent()) {
+                span = existingSpan.get();
+                span.setStatusCode(sr.statusCode());
+                span.setStatusMessage(sr.statusMessage());
+                if (sr.attributes() != null) span.setAttributes(sr.attributes());
+                if (sr.startedAt() != null) span.setStartedAt(sr.startedAt());
+                if (sr.endedAt() != null) span.setEndedAt(sr.endedAt());
+                if (span.getStartedAt() != null && span.getEndedAt() != null) {
+                    span.setDurationMs(java.time.Duration.between(span.getStartedAt(), span.getEndedAt()).toMillis());
+                }
+            } else {
+                span = new Span(
+                    trace.getId(),
+                    sr.spanId(),
+                    sr.parentSpanId(),
+                    sr.serviceName(),
+                    sr.operationName(),
+                    sr.spanKind(),
+                    sr.statusCode(),
+                    sr.statusMessage(),
+                    sr.attributes(),
+                    sr.startedAt(),
+                    sr.endedAt()
+                );
+            }
             spanRepository.save(span);
         }
 
@@ -123,21 +167,16 @@ public class TraceService {
 
     @Transactional(readOnly = true)
     public ServiceGraphDto getServiceGraph(UUID workspaceId) {
-        List<Trace> traces = traceRepository.findByWorkspaceIdOrderByStartedAtDesc(
-            workspaceId,
-            org.springframework.data.domain.PageRequest.of(0, 50)
-        ).getContent();
+        List<Trace> traces = traceRepository.findByWorkspaceIdOrderByStartedAtDesc(workspaceId, Pageable.ofSize(100)).getContent();
+        Map<String, long[]> serviceStats = new HashMap<>(); // [callCount, errorCount]
+        Map<String, Long> edgeCounts = new HashMap<>();
 
-        Map<String, int[]> serviceStats = new HashMap<>(); // [calls, errors]
-        Map<String, Integer> edgeCounts = new HashMap<>(); // "from->to" -> count
-
-        for (Trace trace : traces) {
-            List<Span> spans = spanRepository.findByTraceIdOrderByStartedAtAsc(trace.getId());
+        for (Trace t : traces) {
+            List<Span> spans = spanRepository.findByTraceIdOrderByStartedAtAsc(t.getId());
             Map<String, String> spanToService = new HashMap<>();
-
             for (Span s : spans) {
                 spanToService.put(s.getSpanId(), s.getServiceName());
-                int[] stats = serviceStats.computeIfAbsent(s.getServiceName(), k -> new int[2]);
+                long[] stats = serviceStats.computeIfAbsent(s.getServiceName(), k -> new long[2]);
                 stats[0]++;
                 if ("ERROR".equalsIgnoreCase(s.getStatusCode())) {
                     stats[1]++;
@@ -147,24 +186,25 @@ public class TraceService {
             for (Span s : spans) {
                 if (s.getParentSpanId() != null && spanToService.containsKey(s.getParentSpanId())) {
                     String parentService = spanToService.get(s.getParentSpanId());
-                    if (!parentService.equals(s.getServiceName())) {
-                        String edgeKey = parentService + "->" + s.getServiceName();
-                        edgeCounts.put(edgeKey, edgeCounts.getOrDefault(edgeKey, 0) + 1);
+                    String childService = s.getServiceName();
+                    if (!parentService.equalsIgnoreCase(childService)) {
+                        String edgeKey = parentService + "->" + childService;
+                        edgeCounts.put(edgeKey, edgeCounts.getOrDefault(edgeKey, 0L) + 1);
                     }
                 }
             }
         }
 
-        List<ServiceDependencyNode> nodes = new ArrayList<>();
-        for (Map.Entry<String, int[]> entry : serviceStats.entrySet()) {
-            nodes.add(new ServiceDependencyNode(entry.getKey(), entry.getValue()[0], entry.getValue()[1]));
-        }
+        List<ServiceNodeDto> nodes = serviceStats.entrySet().stream()
+            .map(e -> new ServiceNodeDto(e.getKey(), e.getValue()[0], e.getValue()[1]))
+            .toList();
 
-        List<ServiceDependencyEdge> edges = new ArrayList<>();
-        for (Map.Entry<String, Integer> entry : edgeCounts.entrySet()) {
-            String[] parts = entry.getKey().split("->");
-            edges.add(new ServiceDependencyEdge(parts[0], parts[1], entry.getValue()));
-        }
+        List<ServiceEdgeDto> edges = edgeCounts.entrySet().stream()
+            .map(e -> {
+                String[] parts = e.getKey().split("->");
+                return new ServiceEdgeDto(parts[0], parts[1], e.getValue());
+            })
+            .toList();
 
         return new ServiceGraphDto(nodes, edges);
     }

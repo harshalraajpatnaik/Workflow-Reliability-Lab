@@ -46,61 +46,78 @@ public class PaymentSimulatorService {
 
     @Transactional
     public PaymentTransactionDto initiatePayment(UUID workspaceId, InitiatePaymentRequest request) {
+        String idempotencyKey = (request.idempotencyKey() != null && !request.idempotencyKey().isBlank())
+            ? request.idempotencyKey().trim()
+            : "idem_pay_" + UUID.randomUUID().toString().substring(0, 12);
+
         // Idempotency check: return existing if idempotency key was previously processed
         Optional<PaymentTransaction> existing = transactionRepository.findByWorkspaceIdAndIdempotencyKey(
             workspaceId,
-            request.idempotencyKey().trim()
+            idempotencyKey
         );
         if (existing.isPresent()) {
-            log.info("Idempotent payment request recognized for key: {}", request.idempotencyKey());
+            log.info("Idempotent payment request recognized for key: {}", idempotencyKey);
             return PaymentTransactionDto.from(existing.get());
         }
 
         String ref = "TXN-" + System.currentTimeMillis() + "-" + UUID.randomUUID().toString().substring(0, 4).toUpperCase();
+        String currency = (request.currency() != null && !request.currency().isBlank()) ? request.currency().trim() : "USD";
         PaymentTransaction txn = new PaymentTransaction(
             workspaceId,
             request.executionId(),
             ref,
-            request.idempotencyKey().trim(),
+            idempotencyKey,
             request.amount(),
-            request.currency()
+            currency,
+            "SimulatedGateway"
         );
+        if (request.customerId() != null) {
+            txn.setCustomerId(request.customerId());
+        }
 
-        String fault = request.faultSimulation() != null ? request.faultSimulation().toUpperCase() : "NONE";
+        String fault = request.faultSimulation() != null ? request.faultSimulation() : request.faultMode();
+        if (fault != null) {
+            fault = fault.toUpperCase().trim();
+        }
 
-        if ("TIMEOUT".equals(fault)) {
+        if ("TIMEOUT".equals(fault) || "GATEWAY_TIMEOUT".equals(fault)) {
             txn.setStatus(PaymentStatus.TIMED_OUT);
-            txn.setReconciliationStatus("RECONCILIATION_PENDING");
-            txn.setErrorCode("ERR_PROVIDER_TIMEOUT");
-            txn.setErrorMessage("Simulated payment provider gateway timeout on capture. Action required: Reconcile before retrying.");
-        } else if ("DECLINE".equals(fault)) {
+            txn.setErrorCode("GATEWAY_TIMEOUT");
+            txn.setErrorMessage("Simulated timeout: gateway did not respond within 8000ms SLA");
+            txn.setReconciliationStatus("PENDING_RECONCILIATION");
+            txn.setReconciliationNotes("Transaction requires asynchronous webhook or reconciliation batch to resolve final state");
+        } else if ("DECLINE".equals(fault) || "GATEWAY_DECLINE".equals(fault)) {
             txn.setStatus(PaymentStatus.FAILED);
-            txn.setErrorCode("card_declined");
-            txn.setErrorMessage("Your card has insufficient funds for this simulated transaction.");
+            txn.setErrorCode("CARD_DECLINED");
+            txn.setErrorMessage("Simulated decline: insufficient funds or risk rejection");
+            txn.setReconciliationStatus("NOT_REQUIRED");
         } else {
-            // Success flow
+            // Clean path: Authorized -> Captured
             txn.setStatus(PaymentStatus.CAPTURED);
             txn.setCapturedAmount(request.amount());
-            txn.setProviderChargeId("ch_sim_" + UUID.randomUUID().toString().substring(0, 16));
+            txn.setProviderChargeId("ch_" + UUID.randomUUID().toString().substring(0, 16));
+            txn.setReconciliationStatus("RECONCILED");
         }
 
         PaymentTransaction saved = transactionRepository.save(txn);
 
-        // Journal payment event if executionId is attached
+        // Create journal event for observability
         if (request.executionId() != null) {
-            String eventType = txn.getStatus() == PaymentStatus.CAPTURED ? "PaymentCaptured" : "PaymentFailed";
-            EventStatus evStatus = txn.getStatus() == PaymentStatus.CAPTURED ? EventStatus.PROCESSED : EventStatus.FAILED;
-            String meta = String.format("{\"amount\": %.2f, \"currency\": \"%s\", \"chargeId\": \"%s\"}",
-                txn.getAmount(), txn.getCurrency(), txn.getProviderChargeId() != null ? txn.getProviderChargeId() : "");
-
+            String eventType = switch (saved.getStatus()) {
+                case CAPTURED -> "PaymentCaptured";
+                case TIMED_OUT -> "PaymentTimedOut";
+                case FAILED -> "PaymentFailed";
+                default -> "PaymentInitiated";
+            };
+            EventStatus evStatus = saved.getStatus() == PaymentStatus.CAPTURED ? EventStatus.PROCESSED : EventStatus.FAILED;
             eventRepository.save(new Event(
                 workspaceId,
                 request.executionId(),
                 eventType,
-                "PaymentGateway",
+                "PaymentSimulator",
                 ref,
-                "idemp-pay-" + ref,
-                meta,
+                idempotencyKey,
+                "{\"amount\": " + request.amount() + ", \"currency\": \"" + currency + "\", \"status\": \"" + saved.getStatus() + "\"}",
                 evStatus,
                 0,
                 Instant.now()
@@ -113,124 +130,80 @@ public class PaymentSimulatorService {
     @Transactional
     public PaymentTransactionDto refundPayment(UUID workspaceId, UUID transactionId, RefundPaymentRequest request) {
         PaymentTransaction txn = transactionRepository.findByIdAndWorkspaceId(transactionId, workspaceId)
-            .orElseThrow(() -> new ResourceNotFoundException("Transaction not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("Payment transaction not found in this workspace"));
 
-        if (!txn.getStatus().canRefund()) {
-            throw new BadRequestException("Transaction in status " + txn.getStatus() + " cannot be refunded");
+        if (txn.getStatus() != PaymentStatus.CAPTURED && txn.getStatus() != PaymentStatus.PARTIALLY_REFUNDED) {
+            throw new BadRequestException("Only CAPTURED or PARTIALLY_REFUNDED transactions can be refunded. Current status: " + txn.getStatus());
         }
 
-        BigDecimal newTotalRefunded = txn.getRefundedAmount().add(request.amount());
+        BigDecimal currentRefunded = txn.getRefundedAmount() != null ? txn.getRefundedAmount() : BigDecimal.ZERO;
+        BigDecimal newTotalRefunded = currentRefunded.add(request.amount());
+
+        // Invariant INV-005 check: Total refunds must never exceed captured amount
         if (newTotalRefunded.compareTo(txn.getCapturedAmount()) > 0) {
-            throw new BadRequestException(String.format(
-                "Invariant Violation: Refund amount (%.2f) + previous refunds (%.2f) exceeds captured amount (%.2f)",
-                request.amount(), txn.getRefundedAmount(), txn.getCapturedAmount()
+            throw new ConflictException(String.format(
+                "Invariant violation: Requested refund of %s exceeds remaining refundable amount of %s (Captured: %s, Already refunded: %s)",
+                request.amount(), txn.getCapturedAmount().subtract(currentRefunded), txn.getCapturedAmount(), currentRefunded
             ));
         }
 
         txn.setRefundedAmount(newTotalRefunded);
-        if (newTotalRefunded.compareTo(txn.getCapturedAmount()) >= 0) {
+        if (newTotalRefunded.compareTo(txn.getCapturedAmount()) == 0) {
             txn.setStatus(PaymentStatus.REFUNDED);
         } else {
             txn.setStatus(PaymentStatus.PARTIALLY_REFUNDED);
         }
 
-        PaymentTransaction updated = transactionRepository.save(txn);
-
-        if (txn.getExecutionId() != null) {
-            String meta = String.format("{\"refundAmount\": %.2f, \"totalRefunded\": %.2f, \"reason\": \"%s\"}",
-                request.amount(), newTotalRefunded, request.reason() != null ? request.reason() : "");
-
-            eventRepository.save(new Event(
-                workspaceId,
-                txn.getExecutionId(),
-                "PaymentRefunded",
-                "PaymentGateway",
-                txn.getTransactionReference(),
-                "idemp-ref-" + UUID.randomUUID(),
-                meta,
-                EventStatus.PROCESSED,
-                0,
-                Instant.now()
-            ));
-        }
-
-        return PaymentTransactionDto.from(updated);
-    }
-
-    @Transactional
-    public PaymentWebhookDto processWebhook(UUID workspaceId, SimulateWebhookRequest request) {
-        String eventId = request.providerEventId().trim();
-
-        // Durable inbox deduplication check
-        Optional<PaymentWebhook> existing = webhookRepository.findByWorkspaceIdAndProviderEventId(workspaceId, eventId);
-        if (existing.isPresent()) {
-            PaymentWebhook duplicate = new PaymentWebhook(
-                workspaceId,
-                request.transactionId(),
-                eventId + "-dup-" + System.currentTimeMillis(),
-                request.eventType(),
-                request.payload() != null ? request.payload() : "{}"
-            );
-            duplicate.setDuplicate(true);
-            duplicate.setProcessed(false);
-            duplicate.setProcessingError("Duplicate webhook ignored: Provider event ID " + eventId + " already ingested");
-            PaymentWebhook saved = webhookRepository.save(duplicate);
-            return PaymentWebhookDto.from(saved);
-        }
-
-        PaymentWebhook webhook = new PaymentWebhook(
-            workspaceId,
-            request.transactionId(),
-            eventId,
-            request.eventType(),
-            request.payload() != null ? request.payload() : "{}"
-        );
-
-        if (request.transactionId() != null) {
-            transactionRepository.findByIdAndWorkspaceId(request.transactionId(), workspaceId).ifPresent(txn -> {
-                if ("charge.succeeded".equalsIgnoreCase(request.eventType()) && txn.getStatus() == PaymentStatus.AUTHORIZED) {
-                    txn.setStatus(PaymentStatus.CAPTURED);
-                    txn.setCapturedAmount(txn.getAmount());
-                    transactionRepository.save(txn);
-                }
-            });
-        }
-
-        webhook.setProcessed(true);
-        webhook.setProcessedAt(Instant.now());
-        PaymentWebhook saved = webhookRepository.save(webhook);
-        return PaymentWebhookDto.from(saved);
+        PaymentTransaction saved = transactionRepository.save(txn);
+        return PaymentTransactionDto.from(saved);
     }
 
     @Transactional
     public PaymentTransactionDto reconcileTransaction(UUID workspaceId, UUID transactionId) {
         PaymentTransaction txn = transactionRepository.findByIdAndWorkspaceId(transactionId, workspaceId)
-            .orElseThrow(() -> new ResourceNotFoundException("Transaction not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("Payment transaction not found in this workspace"));
 
-        // Deterministic reconciliation: query simulated provider ledger
-        log.info("Reconciling transaction {} with simulated provider", txn.getTransactionReference());
-        txn.setReconciliationStatus("RECONCILED");
-        txn.setReconciliationNotes("Reconciliation completed via provider lookup. Verified charge captured successfully on gateway.");
-        if (txn.getStatus() == PaymentStatus.TIMED_OUT || txn.getStatus() == PaymentStatus.PENDING) {
-            txn.setStatus(PaymentStatus.RECONCILED);
+        if (txn.getStatus() == PaymentStatus.TIMED_OUT) {
+            // Reconcile timed-out payment: Simulate discovering gateway settled the charge
+            txn.setStatus(PaymentStatus.CAPTURED);
             txn.setCapturedAmount(txn.getAmount());
-            txn.setProviderChargeId("ch_reconciled_" + UUID.randomUUID().toString().substring(0, 12));
+            txn.setProviderChargeId("ch_reconciled_" + UUID.randomUUID().toString().substring(0, 10));
+            txn.setReconciliationStatus("RECONCILED");
+            txn.setReconciliationNotes("Reconciliation job matched gateway settlement record at " + Instant.now());
+        } else {
+            txn.setReconciliationStatus("RECONCILED");
+            txn.setReconciliationNotes("Reconciled against bank ledger at " + Instant.now());
         }
 
-        PaymentTransaction updated = transactionRepository.save(txn);
-        return PaymentTransactionDto.from(updated);
+        PaymentTransaction saved = transactionRepository.save(txn);
+        return PaymentTransactionDto.from(saved);
     }
 
-    @Transactional(readOnly = true)
-    public PageResponse<PaymentTransactionDto> listTransactions(UUID workspaceId, Pageable pageable) {
-        Page<PaymentTransaction> page = transactionRepository.findByWorkspaceIdOrderByCreatedAtDesc(workspaceId, pageable);
-        return PageResponse.from(page.map(PaymentTransactionDto::from));
+    @Transactional
+    public PaymentWebhookDto processWebhook(UUID workspaceId, SimulateWebhookRequest request) {
+        Optional<PaymentWebhook> existing = webhookRepository.findByWorkspaceIdAndProviderEventId(workspaceId, request.providerEventId());
+        if (existing.isPresent()) {
+            PaymentWebhook duplicate = existing.get();
+            log.warn("Duplicate webhook ignored: event ID {}", request.providerEventId());
+            return PaymentWebhookDto.from(duplicate);
+        }
+
+        PaymentWebhook webhook = new PaymentWebhook(
+            workspaceId,
+            request.transactionId(),
+            request.providerEventId(),
+            request.eventType(),
+            request.payload()
+        );
+        webhook.setProcessed(true);
+        PaymentWebhook saved = webhookRepository.save(webhook);
+        return PaymentWebhookDto.from(saved);
     }
 
     @Transactional(readOnly = true)
     public PaymentTransactionDto getTransaction(UUID workspaceId, UUID transactionId) {
         PaymentTransaction txn = transactionRepository.findByIdAndWorkspaceId(transactionId, workspaceId)
-            .orElseThrow(() -> new ResourceNotFoundException("Transaction not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("Payment transaction not found in this workspace"));
         return PaymentTransactionDto.from(txn);
     }
 
@@ -238,5 +211,11 @@ public class PaymentSimulatorService {
     public List<PaymentWebhookDto> getTransactionWebhooks(UUID transactionId) {
         return webhookRepository.findByTransactionIdOrderByReceivedAtAsc(transactionId)
             .stream().map(PaymentWebhookDto::from).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<PaymentTransactionDto> listTransactions(UUID workspaceId, Pageable pageable) {
+        Page<PaymentTransaction> page = transactionRepository.findByWorkspaceIdOrderByCreatedAtDesc(workspaceId, pageable);
+        return PageResponse.from(page.map(PaymentTransactionDto::from));
     }
 }

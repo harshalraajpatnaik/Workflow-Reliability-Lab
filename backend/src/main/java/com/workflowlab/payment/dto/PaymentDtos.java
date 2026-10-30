@@ -14,7 +14,6 @@ public final class PaymentDtos {
     private PaymentDtos() {}
 
     public record InitiatePaymentRequest(
-        @NotBlank(message = "Idempotency key is required")
         String idempotencyKey,
 
         @NotNull(message = "Amount is required")
@@ -23,7 +22,9 @@ public final class PaymentDtos {
 
         String currency,
         UUID executionId,
-        String faultSimulation  // "TIMEOUT", "DECLINE", "NONE"
+        String customerId,
+        String faultSimulation,  // "TIMEOUT", "DECLINE", "NONE"
+        String faultMode
     ) {}
 
     public record RefundPaymentRequest(
@@ -57,6 +58,7 @@ public final class PaymentDtos {
         BigDecimal capturedAmount,
         BigDecimal refundedAmount,
         String providerChargeId,
+        String customerId,
         String errorCode,
         String errorMessage,
         String reconciliationStatus,
@@ -64,26 +66,27 @@ public final class PaymentDtos {
         Instant createdAt,
         Instant updatedAt
     ) {
-        public static PaymentTransactionDto from(PaymentTransaction pt) {
+        public static PaymentTransactionDto from(PaymentTransaction txn) {
             return new PaymentTransactionDto(
-                pt.getId(),
-                pt.getWorkspaceId(),
-                pt.getExecutionId(),
-                pt.getTransactionReference(),
-                pt.getIdempotencyKey(),
-                pt.getAmount(),
-                pt.getCurrency(),
-                pt.getStatus(),
-                pt.getProvider(),
-                pt.getCapturedAmount(),
-                pt.getRefundedAmount(),
-                pt.getProviderChargeId(),
-                pt.getErrorCode(),
-                pt.getErrorMessage(),
-                pt.getReconciliationStatus(),
-                pt.getReconciliationNotes(),
-                pt.getCreatedAt(),
-                pt.getUpdatedAt()
+                txn.getId(),
+                txn.getWorkspaceId(),
+                txn.getExecutionId(),
+                txn.getTransactionReference(),
+                txn.getIdempotencyKey(),
+                txn.getAmount(),
+                txn.getCurrency(),
+                txn.getStatus(),
+                txn.getProvider(),
+                txn.getCapturedAmount(),
+                txn.getRefundedAmount(),
+                txn.getProviderChargeId(),
+                txn.getCustomerId(),
+                txn.getErrorCode(),
+                txn.getErrorMessage(),
+                txn.getReconciliationStatus(),
+                txn.getReconciliationNotes(),
+                txn.getCreatedAt(),
+                txn.getUpdatedAt()
             );
         }
     }
@@ -101,19 +104,19 @@ public final class PaymentDtos {
         Instant receivedAt,
         Instant processedAt
     ) {
-        public static PaymentWebhookDto from(PaymentWebhook w) {
+        public static PaymentWebhookDto from(PaymentWebhook wh) {
             return new PaymentWebhookDto(
-                w.getId(),
-                w.getWorkspaceId(),
-                w.getTransactionId(),
-                w.getProviderEventId(),
-                w.getEventType(),
-                w.getPayload(),
-                w.isProcessed(),
-                w.isDuplicate(),
-                w.getProcessingError(),
-                w.getReceivedAt(),
-                w.getProcessedAt()
+                wh.getId(),
+                wh.getWorkspaceId(),
+                wh.getTransactionId(),
+                wh.getProviderEventId(),
+                wh.getEventType(),
+                wh.getPayload(),
+                wh.isProcessed(),
+                wh.isDuplicate(),
+                wh.getProcessingError(),
+                wh.getReceivedAt(),
+                wh.getProcessedAt()
             );
         }
     }

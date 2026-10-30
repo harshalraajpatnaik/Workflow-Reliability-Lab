@@ -34,8 +34,12 @@ public class OutOfOrderEventRule implements AnomalyDetectionRule {
         }
 
         if (shippedIndex != -1 && paidIndex != -1 && shippedIndex < paidIndex) {
-            String evidence = String.format("{\"shippedIndex\": %d, \"paidIndex\": %d, \"eventSequence\": \"%s\"}",
-                shippedIndex, paidIndex, events.stream().map(Event::getEventType).toList());
+            String sequenceJson = events.stream()
+                .map(Event::getEventType)
+                .map(t -> "\"" + t.replace("\"", "\\\"") + "\"")
+                .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+            String evidence = String.format("{\"shippedIndex\": %d, \"paidIndex\": %d, \"eventSequence\": %s}",
+                shippedIndex, paidIndex, sequenceJson);
 
             return Optional.of(new Anomaly(
                 execution.getWorkspaceId(),

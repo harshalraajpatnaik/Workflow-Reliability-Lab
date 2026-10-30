@@ -33,10 +33,22 @@ public class EventService {
         executionRepository.findByIdAndWorkspaceId(request.executionId(), workspaceId)
             .orElseThrow(() -> new ResourceNotFoundException("Execution not found in this workspace"));
 
+        String idempotencyKey = (request.idempotencyKey() != null && !request.idempotencyKey().isBlank())
+            ? request.idempotencyKey().trim()
+            : "idem_" + UUID.randomUUID().toString().substring(0, 16);
+
+        String correlationId = (request.correlationId() != null && !request.correlationId().isBlank())
+            ? request.correlationId().trim()
+            : UUID.randomUUID().toString();
+
+        String sourceService = (request.sourceService() != null && !request.sourceService().isBlank())
+            ? request.sourceService().trim()
+            : "api-client";
+
         // Check for idempotency duplicate
         Optional<Event> existing = eventRepository.findByExecutionIdAndIdempotencyKey(
             request.executionId(),
-            request.idempotencyKey().trim()
+            idempotencyKey
         );
 
         if (existing.isPresent()) {
@@ -47,33 +59,33 @@ public class EventService {
             );
         }
 
-        String safePayload = redactSensitivePayload(request.payloadMetadata());
+        String rawPayload = request.payload() != null ? request.payload() : request.payloadMetadata();
+        String safePayload = redactSensitivePayload(rawPayload);
 
         Event event = new Event(
             workspaceId,
             request.executionId(),
             request.eventType().trim(),
-            request.sourceService().trim(),
-            request.correlationId().trim(),
-            request.idempotencyKey().trim(),
+            sourceService,
+            correlationId,
+            idempotencyKey,
             safePayload,
             request.status() != null ? request.status() : EventStatus.RECEIVED,
             request.retryCount() != null ? request.retryCount() : 0,
             request.occurredAt() != null ? request.occurredAt() : Instant.now()
         );
 
-        event.setProcessedAt(Instant.now());
         if (request.errorClass() != null) event.setErrorClass(request.errorClass());
         if (request.errorMessage() != null) event.setErrorMessage(request.errorMessage());
 
         Event saved = eventRepository.save(event);
-        return new IngestEventResult(EventDto.from(saved), false, "Event accepted and journaled successfully");
+        return new IngestEventResult(EventDto.from(saved), false, "Event ingested successfully");
     }
 
     @Transactional(readOnly = true)
     public List<EventDto> getExecutionEvents(UUID workspaceId, UUID executionId) {
         executionRepository.findByIdAndWorkspaceId(executionId, workspaceId)
-            .orElseThrow(() -> new ResourceNotFoundException("Execution not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("Execution not found in this workspace"));
 
         return eventRepository.findByExecutionIdOrderByOccurredAtAsc(executionId)
             .stream().map(EventDto::from).toList();
@@ -86,8 +98,10 @@ public class EventService {
     }
 
     private String redactSensitivePayload(String payload) {
-        if (payload == null) return "{}";
-        // Redact common sensitive fields
-        return payload.replaceAll("(?i)(\"?(password|secret|card_number|cvv|token)\"?\\s*:\\s*\")[^\"]+(\")", "$1[REDACTED]$3");
+        if (payload == null || payload.isBlank()) return null;
+        // Basic PCI / PII redaction for common secret keys
+        return payload
+            .replaceAll("(?i)\"(password|secret|token|apiKey|cardNumber|cvv)\"\\s*:\\s*\"[^\"]+\"", "\"$1\":\"[REDACTED]\"")
+            .replaceAll("(?i)\"(pan)\"\\s*:\\s*\"\\d{12,19}\"", "\"$1\":\"[REDACTED]\"");
     }
 }

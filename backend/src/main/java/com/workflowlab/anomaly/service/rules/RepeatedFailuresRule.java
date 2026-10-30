@@ -26,8 +26,11 @@ public class RepeatedFailuresRule implements AnomalyDetectionRule {
             .count();
 
         if (failedEventsCount >= 2 || execution.getStatus() == ExecutionStatus.FAILED) {
+            String safeError = execution.getErrorMessage() != null
+                ? execution.getErrorMessage().replace("\"", "\\\"").replace("\n", " ").replace("\r", "")
+                : "";
             String evidence = String.format("{\"failedEventsCount\": %d, \"executionStatus\": \"%s\", \"errorMessage\": \"%s\"}",
-                failedEventsCount, execution.getStatus(), execution.getErrorMessage() != null ? execution.getErrorMessage() : "");
+                failedEventsCount, execution.getStatus(), safeError);
 
             return Optional.of(new Anomaly(
                 execution.getWorkspaceId(),

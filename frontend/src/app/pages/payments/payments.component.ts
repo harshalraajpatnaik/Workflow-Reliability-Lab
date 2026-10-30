@@ -423,6 +423,8 @@ export class PaymentsComponent implements OnInit {
       amount: this.amount,
       currency: 'USD',
       customerId: 'cust_sandbox_99',
+      idempotencyKey: 'idem_pay_' + Date.now(),
+      faultSimulation: this.faultMode,
       faultMode: this.faultMode
     };
 

@@ -29,7 +29,10 @@ public class DuplicateEventRule implements AnomalyDetectionRule {
         }
 
         if (!duplicatedTypes.isEmpty()) {
-            String evidence = String.format("{\"duplicatedEventTypes\": %s}", duplicatedTypes);
+            String jsonArray = duplicatedTypes.stream()
+                .map(t -> "\"" + t.replace("\"", "\\\"") + "\"")
+                .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+            String evidence = String.format("{\"duplicatedEventTypes\": %s}", jsonArray);
 
             return Optional.of(new Anomaly(
                 execution.getWorkspaceId(),

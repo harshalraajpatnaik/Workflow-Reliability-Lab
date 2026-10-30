@@ -36,6 +36,17 @@ public class TraceController {
             .body(ApiResponse.ok("Trace ingested successfully", trace));
     }
 
+    @PostMapping("/api/v1/workspaces/{workspaceId}/traces/spans")
+    @Operation(summary = "Ingest a single OpenTelemetry span into a trace")
+    public ResponseEntity<ApiResponse<TraceDetailDto>> ingestSingleSpan(
+        @PathVariable UUID workspaceId,
+        @Valid @RequestBody SingleSpanIngestRequest request
+    ) {
+        TraceDetailDto trace = traceService.ingestSingleSpan(workspaceId, request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(ApiResponse.ok("Span ingested successfully", trace));
+    }
+
     @PostMapping("/api/v1/ingest/traces")
     @Operation(summary = "Machine-to-machine trace ingestion endpoint (requires API Key or Bearer Token)")
     public ResponseEntity<ApiResponse<TraceDetailDto>> ingestTraceM2M(
@@ -49,6 +60,21 @@ public class TraceController {
         TraceDetailDto trace = traceService.ingestTrace(workspaceId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
             .body(ApiResponse.ok("Trace ingested successfully", trace));
+    }
+
+    @PostMapping("/api/v1/ingest/spans")
+    @Operation(summary = "Machine-to-machine span ingestion endpoint (requires API Key or Bearer Token)")
+    public ResponseEntity<ApiResponse<TraceDetailDto>> ingestSpanM2M(
+        @Valid @RequestBody SingleSpanIngestRequest request
+    ) {
+        UUID workspaceId = TenantContext.getWorkspaceId();
+        if (workspaceId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error("Tenant workspace context not identified", "TENANT_REQUIRED"));
+        }
+        TraceDetailDto trace = traceService.ingestSingleSpan(workspaceId, request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(ApiResponse.ok("Span ingested successfully", trace));
     }
 
     @GetMapping("/api/v1/workspaces/{workspaceId}/traces")

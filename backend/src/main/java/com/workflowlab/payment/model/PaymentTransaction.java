@@ -48,6 +48,9 @@ public class PaymentTransaction {
     @Column(name = "refunded_amount", nullable = false, precision = 15, scale = 2)
     private BigDecimal refundedAmount = BigDecimal.ZERO;
 
+    @Column(name = "customer_id", length = 100)
+    private String customerId;
+
     @Column(name = "provider_charge_id")
     private String providerChargeId;
 
@@ -112,6 +115,27 @@ public class PaymentTransaction {
     public void setCapturedAmount(BigDecimal capturedAmount) { this.capturedAmount = capturedAmount; }
     public BigDecimal getRefundedAmount() { return refundedAmount; }
     public void setRefundedAmount(BigDecimal refundedAmount) { this.refundedAmount = refundedAmount; }
+    public PaymentTransaction(
+        UUID workspaceId,
+        UUID executionId,
+        String transactionReference,
+        String idempotencyKey,
+        BigDecimal amount,
+        String currency,
+        String provider
+    ) {
+        this.workspaceId = workspaceId;
+        this.executionId = executionId;
+        this.transactionReference = transactionReference;
+        this.idempotencyKey = idempotencyKey;
+        this.amount = amount;
+        this.currency = currency != null ? currency : "USD";
+        if (provider != null) this.provider = provider;
+        this.status = PaymentStatus.INITIATED;
+    }
+
+    public String getCustomerId() { return customerId; }
+    public void setCustomerId(String customerId) { this.customerId = customerId; }
     public String getProviderChargeId() { return providerChargeId; }
     public void setProviderChargeId(String providerChargeId) { this.providerChargeId = providerChargeId; }
     public String getErrorCode() { return errorCode; }

@@ -16,10 +16,14 @@ public interface ExecutionRepository extends JpaRepository<Execution, UUID> {
 
     Optional<Execution> findByIdAndWorkspaceId(UUID id, UUID workspaceId);
 
+    Page<Execution> findByWorkspaceIdOrderByStartedAtDesc(UUID workspaceId, Pageable pageable);
+
     @Query("SELECT e FROM Execution e WHERE e.workspaceId = :workspaceId " +
            "AND (:environmentId IS NULL OR e.environmentId = :environmentId) " +
            "AND (:status IS NULL OR e.status = :status) " +
-           "AND (:search IS NULL OR LOWER(e.workflowName) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(e.correlationId) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+           "AND (CAST(:search AS string) IS NULL OR :search = '' OR " +
+           "     LOWER(e.workflowName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) OR " +
+           "     LOWER(e.correlationId) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))) " +
            "ORDER BY e.startedAt DESC")
     Page<Execution> findFiltered(
         @Param("workspaceId") UUID workspaceId,

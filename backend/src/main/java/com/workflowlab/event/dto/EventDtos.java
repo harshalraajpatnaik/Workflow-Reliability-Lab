@@ -17,15 +17,11 @@ public final class EventDtos {
         @NotBlank(message = "Event type is required")
         String eventType,
 
-        @NotBlank(message = "Source service is required")
         String sourceService,
-
-        @NotBlank(message = "Correlation ID is required")
+        String targetService,
         String correlationId,
-
-        @NotBlank(message = "Idempotency key is required")
         String idempotencyKey,
-
+        String payload,
         String payloadMetadata,
         EventStatus status,
         Integer retryCount,
@@ -57,23 +53,23 @@ public final class EventDtos {
         Instant processedAt,
         Instant createdAt
     ) {
-        public static EventDto from(Event e) {
+        public static EventDto from(Event event) {
             return new EventDto(
-                e.getId(),
-                e.getWorkspaceId(),
-                e.getExecutionId(),
-                e.getEventType(),
-                e.getSourceService(),
-                e.getCorrelationId(),
-                e.getIdempotencyKey(),
-                e.getPayloadMetadata(),
-                e.getStatus(),
-                e.getRetryCount(),
-                e.getErrorClass(),
-                e.getErrorMessage(),
-                e.getOccurredAt(),
-                e.getProcessedAt(),
-                e.getCreatedAt()
+                event.getId(),
+                event.getWorkspaceId(),
+                event.getExecutionId(),
+                event.getEventType(),
+                event.getSourceService(),
+                event.getCorrelationId(),
+                event.getIdempotencyKey(),
+                event.getPayloadMetadata(),
+                event.getStatus(),
+                event.getRetryCount(),
+                event.getErrorClass(),
+                event.getErrorMessage(),
+                event.getOccurredAt(),
+                event.getProcessedAt(),
+                event.getCreatedAt()
             );
         }
     }

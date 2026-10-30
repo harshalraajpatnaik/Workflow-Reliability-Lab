@@ -31,7 +31,13 @@ public class ExecutionService {
         String search,
         Pageable pageable
     ) {
-        Page<Execution> page = executionRepository.findFiltered(workspaceId, environmentId, status, search, pageable);
+        String sanitizedSearch = (search != null && !search.isBlank()) ? search.trim() : null;
+        Page<Execution> page;
+        if (environmentId == null && status == null && sanitizedSearch == null) {
+            page = executionRepository.findByWorkspaceIdOrderByStartedAtDesc(workspaceId, pageable);
+        } else {
+            page = executionRepository.findFiltered(workspaceId, environmentId, status, sanitizedSearch, pageable);
+        }
         return PageResponse.from(page.map(ExecutionDto::from));
     }
 
@@ -48,18 +54,11 @@ public class ExecutionService {
             workspaceId,
             request.environmentId(),
             request.workflowName().trim(),
-            request.correlationId().trim(),
-            request.triggerSource(),
-            Boolean.TRUE.equals(request.isDemo())
+            request.correlationId() != null ? request.correlationId().trim() : UUID.randomUUID().toString(),
+            request.triggerSource() != null ? request.triggerSource().trim() : "API",
+            false
         );
-
-        if (request.parentExecutionId() != null) {
-            execution.setParentExecutionId(request.parentExecutionId());
-        }
-        if (request.inputPayloadMeta() != null) {
-            execution.setInputPayloadMeta(request.inputPayloadMeta());
-        }
-
+        execution.setInputPayloadMeta(request.inputPayloadMeta());
         Execution saved = executionRepository.save(execution);
         return ExecutionDto.from(saved);
     }
@@ -67,16 +66,9 @@ public class ExecutionService {
     @Transactional
     public ExecutionDto updateExecutionStatus(UUID workspaceId, UUID executionId, UpdateExecutionStatusRequest request) {
         Execution execution = executionRepository.findByIdAndWorkspaceId(executionId, workspaceId)
-            .orElseThrow(() -> new ResourceNotFoundException("Execution not found"));
-
-        if (execution.getStatus().isTerminal() && request.status() != execution.getStatus()) {
-            throw new BadRequestException("Cannot transition execution from terminal status " + execution.getStatus() + " to " + request.status());
-        }
+            .orElseThrow(() -> new ResourceNotFoundException("Execution not found in this workspace"));
 
         execution.setStatus(request.status());
-        if (request.status().isTerminal()) {
-            execution.setEndedAt(Instant.now());
-        }
         if (request.outputPayloadMeta() != null) {
             execution.setOutputPayloadMeta(request.outputPayloadMeta());
         }
@@ -86,20 +78,28 @@ public class ExecutionService {
         if (request.errorStack() != null) {
             execution.setErrorStack(request.errorStack());
         }
+        if (request.status() == ExecutionStatus.COMPLETED || request.status() == ExecutionStatus.FAILED || request.status() == ExecutionStatus.TIMED_OUT || request.status() == ExecutionStatus.CANCELLED) {
+            execution.setEndedAt(Instant.now());
+        }
 
-        Execution updated = executionRepository.save(execution);
-        return ExecutionDto.from(updated);
+        Execution saved = executionRepository.save(execution);
+        return ExecutionDto.from(saved);
     }
 
     @Transactional(readOnly = true)
     public ExecutionStatsDto getStats(UUID workspaceId) {
+        return getExecutionStats(workspaceId);
+    }
+
+    @Transactional(readOnly = true)
+    public ExecutionStatsDto getExecutionStats(UUID workspaceId) {
         long total = executionRepository.countByWorkspaceId(workspaceId);
         long completed = executionRepository.countByWorkspaceIdAndStatus(workspaceId, ExecutionStatus.COMPLETED);
         long failed = executionRepository.countByWorkspaceIdAndStatus(workspaceId, ExecutionStatus.FAILED);
         long running = executionRepository.countByWorkspaceIdAndStatus(workspaceId, ExecutionStatus.RUNNING);
         long timedOut = executionRepository.countByWorkspaceIdAndStatus(workspaceId, ExecutionStatus.TIMED_OUT);
 
-        double rate = total > 0 ? (double) completed / total * 100.0 : 0.0;
-        return new ExecutionStatsDto(total, completed, failed, running, timedOut, Math.round(rate * 10.0) / 10.0);
+        double successRate = total > 0 ? ((double) completed / total) * 100.0 : 100.0;
+        return new ExecutionStatsDto(total, completed, failed, running, timedOut, Math.round(successRate * 10.0) / 10.0);
     }
 }

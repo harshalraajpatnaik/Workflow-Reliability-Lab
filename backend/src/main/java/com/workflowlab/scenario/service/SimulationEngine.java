@@ -90,9 +90,12 @@ public class SimulationEngine {
         // 5. Conclude simulation run
         run.setStatus("COMPLETED");
         run.setEndedAt(Instant.now());
+        String safeExpected = scenario.getExpectedBehavior() != null
+            ? scenario.getExpectedBehavior().replace("\"", "\\\"").replace("\n", " ").replace("\r", "")
+            : "";
         String observations = String.format(
             "{\"executionId\": \"%s\", \"correlationId\": \"%s\", \"anomaliesCount\": %d, \"invariantsPassed\": %s, \"expectedBehavior\": \"%s\"}",
-            execution.getId(), correlationId, detectedAnomalies.size(), allPassed, scenario.getExpectedBehavior().replace("\"", "\\\"")
+            execution.getId(), correlationId, detectedAnomalies.size(), allPassed, safeExpected
         );
         run.setObservations(observations);
         ScenarioRun savedRun = scenarioRunRepository.save(run);
