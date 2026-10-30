@@ -8,7 +8,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability within Workflow Reliability Lab, please send an email to the repository owner at `68125965+harshalraajpatnaik@users.noreply.github.com`.
+If you discover a security vulnerability within Workflow Reliability Lab, please send an email to the repository owner at `harshalraajpatnaik@ugmail.com`.
 
 Please include:
 - A description of the issue and potential impact.
