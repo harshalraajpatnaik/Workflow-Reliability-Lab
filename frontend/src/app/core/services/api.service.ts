@@ -37,6 +37,10 @@ export class ApiService {
     return this.http.post<ApiResponse<WorkspaceMember>>(`${this.baseUrl}/workspaces/${wsId}/members`, { email, role });
   }
 
+  removeWorkspaceMember(wsId: string, userId: string): Observable<ApiResponse<void>> {
+    return this.http.delete<ApiResponse<void>>(`${this.baseUrl}/workspaces/${wsId}/members/${userId}`);
+  }
+
   // Projects & Environments
   getProjects(wsId: string): Observable<ApiResponse<Project[]>> {
     return this.http.get<ApiResponse<Project[]>>(`${this.baseUrl}/workspaces/${wsId}/projects`);
@@ -44,6 +48,14 @@ export class ApiService {
 
   createProject(wsId: string, name: string, description?: string): Observable<ApiResponse<Project>> {
     return this.http.post<ApiResponse<Project>>(`${this.baseUrl}/workspaces/${wsId}/projects`, { name, description });
+  }
+
+  createEnvironment(wsId: string, projectId: string, name: string, environmentType: string, description?: string): Observable<ApiResponse<Environment>> {
+    return this.http.post<ApiResponse<Environment>>(`${this.baseUrl}/workspaces/${wsId}/projects/${projectId}/environments`, {
+      name,
+      environmentType,
+      description
+    });
   }
 
   // Executions
@@ -216,6 +228,10 @@ export class ApiService {
 
   registerWebhook(wsId: string, data: any): Observable<ApiResponse<Webhook>> {
     return this.http.post<ApiResponse<Webhook>>(`${this.baseUrl}/workspaces/${wsId}/webhooks`, data);
+  }
+
+  deleteWebhook(wsId: string, webhookId: string): Observable<ApiResponse<void>> {
+    return this.http.delete<ApiResponse<void>>(`${this.baseUrl}/workspaces/${wsId}/webhooks/${webhookId}`);
   }
 
   // Audit

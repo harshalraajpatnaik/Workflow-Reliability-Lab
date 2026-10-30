@@ -31,6 +31,7 @@ import { Webhook } from '../../core/models/models';
                 <th>Target URL</th>
                 <th>Event Types</th>
                 <th>Created At</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -43,6 +44,11 @@ import { Webhook } from '../../core/models/models';
                 <td class="font-mono text-cyan">{{ wh.url }}</td>
                 <td><span class="badge badge-info text-xs">{{ wh.eventTypes || '*' }}</span></td>
                 <td class="text-xs text-muted">{{ wh.createdAt | date:'medium' }}</td>
+                <td>
+                  <button class="btn btn-secondary btn-sm text-danger" (click)="onDeleteWebhook(wh.id)">
+                    Delete
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -265,5 +271,18 @@ export class WebhooksComponent implements OnInit {
         this.loading.set(false);
       }
     });
+  }
+
+  onDeleteWebhook(webhookId: string) {
+    const ws = this.workspaceService.currentWorkspace();
+    if (!ws) return;
+
+    if (confirm('Are you sure you want to delete this webhook endpoint? Alerts will no longer be dispatched to it.')) {
+      this.api.deleteWebhook(ws.id, webhookId).subscribe({
+        next: () => {
+          this.loadWebhooks(ws.id);
+        }
+      });
+    }
   }
 }

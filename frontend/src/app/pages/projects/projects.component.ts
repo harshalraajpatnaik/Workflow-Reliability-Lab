@@ -39,7 +39,10 @@ import { Project, Environment } from '../../core/models/models';
 
           <!-- Environments List -->
           <div class="envs-section">
-            <span class="envs-title">ENVIRONMENTS</span>
+            <div class="envs-header">
+              <span class="envs-title">ENVIRONMENTS</span>
+              <button class="btn btn-secondary btn-sm" (click)="openAddEnvModal(p)">+ Add Environment</button>
+            </div>
             <div class="envs-grid">
               <div class="env-item" *ngFor="let env of p.environments">
                 <div class="env-top">
@@ -107,6 +110,45 @@ import { Project, Environment } from '../../core/models/models';
           </form>
         </div>
       </div>
+
+      <!-- Add Environment Modal -->
+      <div class="modal-backdrop" *ngIf="showAddEnvModal()">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3>Add Environment to {{ selectedProject()?.name }}</h3>
+            <button class="close-btn" (click)="showAddEnvModal.set(false)">✕</button>
+          </div>
+          <form (ngSubmit)="onCreateEnvironment()" class="modal-form">
+            <div class="form-group">
+              <label for="envName">Environment Name</label>
+              <input 
+                id="envName" 
+                type="text" 
+                class="form-control" 
+                [(ngModel)]="newEnvName" 
+                name="envName" 
+                required 
+                placeholder="e.g. Canary or Staging West"
+              />
+            </div>
+            <div class="form-group">
+              <label for="envType">Environment Type</label>
+              <select id="envType" class="form-control" [(ngModel)]="newEnvType" name="envType">
+                <option value="DEVELOPMENT">DEVELOPMENT</option>
+                <option value="STAGING">STAGING</option>
+                <option value="PRODUCTION">PRODUCTION</option>
+                <option value="SIMULATION">SIMULATION</option>
+              </select>
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn btn-secondary" (click)="showAddEnvModal.set(false)">Cancel</button>
+              <button type="submit" class="btn btn-primary" [disabled]="loading() || !newEnvName">
+                {{ loading() ? 'Adding...' : 'Add Environment' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   `,
   styles: [`
@@ -166,6 +208,11 @@ import { Project, Environment } from '../../core/models/models';
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
+    }
+    .envs-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
     .envs-title {
       font-size: 0.7rem;
@@ -264,8 +311,12 @@ export class ProjectsComponent implements OnInit {
 
   projects = signal<Project[]>([]);
   showCreateModal = signal(false);
+  showAddEnvModal = signal(false);
+  selectedProject = signal<Project | null>(null);
   newProjectName = '';
   newProjectDesc = '';
+  newEnvName = '';
+  newEnvType = 'DEVELOPMENT';
   loading = signal(false);
 
   constructor() {
@@ -303,6 +354,32 @@ export class ProjectsComponent implements OnInit {
         this.showCreateModal.set(false);
         this.newProjectName = '';
         this.newProjectDesc = '';
+        this.loadProjects(ws.id);
+      },
+      error: () => {
+        this.loading.set(false);
+      }
+    });
+  }
+
+  openAddEnvModal(p: Project) {
+    this.selectedProject.set(p);
+    this.newEnvName = '';
+    this.newEnvType = 'DEVELOPMENT';
+    this.showAddEnvModal.set(true);
+  }
+
+  onCreateEnvironment() {
+    const ws = this.workspaceService.currentWorkspace();
+    const proj = this.selectedProject();
+    if (!ws || !proj || !this.newEnvName) return;
+
+    this.loading.set(true);
+    this.api.createEnvironment(ws.id, proj.id, this.newEnvName, this.newEnvType).subscribe({
+      next: () => {
+        this.loading.set(false);
+        this.showAddEnvModal.set(false);
+        this.newEnvName = '';
         this.loadProjects(ws.id);
       },
       error: () => {

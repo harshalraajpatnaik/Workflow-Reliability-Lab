@@ -5,6 +5,8 @@ import { RouterLink, ActivatedRoute } from '@angular/router';
 type DocTab = 
   | 'portal-guide'
   | 'walkthrough'
+  | 'real-life'
+  | 'publishing'
   | 'overview'
   | 'scenarios'
   | 'invariants'
@@ -57,6 +59,12 @@ type DocTab =
             </button>
             <button class="nav-btn" [class.active]="activeTab() === 'walkthrough'" (click)="setTab('walkthrough')">
               <span class="tab-icon">📖</span> Step-by-Step Portal Tour
+            </button>
+            <button class="nav-btn" [class.active]="activeTab() === 'real-life'" (click)="setTab('real-life')">
+              <span class="tab-icon">🏢</span> Real-Life Customer Playbook
+            </button>
+            <button class="nav-btn" [class.active]="activeTab() === 'publishing'" (click)="setTab('publishing')">
+              <span class="tab-icon">🚀</span> Go-to-Market &amp; Deploy Now
             </button>
             <button class="nav-btn" [class.active]="activeTab() === 'faq'" (click)="setTab('faq')">
               <span class="tab-icon">❓</span> Novice &amp; Arch FAQs
@@ -346,7 +354,359 @@ type DocTab =
             </div>
           </section>
 
-          <!-- 3. INVARIANTS TAB -->
+          <!-- REAL-LIFE CUSTOMER PLAYBOOK TAB -->
+          <section *ngIf="activeTab() === 'real-life'" class="doc-section">
+            <div class="section-badge-top">REAL-WORLD PRODUCTION USE CASES</div>
+            <h1>Real-Life Scenarios, Customer Questions &amp; Adoption Playbook</h1>
+            <p class="lead">
+              How engineering teams use Workflow Reliability Lab to eliminate silent double-charges, out-of-order race conditions, and catastrophic saga failures before they impact customers.
+            </p>
+
+            <div class="real-life-grid">
+              <!-- Real Scenario 1 -->
+              <div class="case-study-card">
+                <div class="case-study-header">
+                  <span class="case-badge ecom">E-COMMERCE SURGE</span>
+                  <h3>Scenario 1: Black Friday Flash Sale — Preventing Double Charges &amp; Ghost Retries</h3>
+                </div>
+                <div class="case-study-body">
+                  <div class="case-part">
+                    <strong>The Failure:</strong>
+                    <p>
+                      High database load causes Payment Gateway responses to slow down to 5,200 ms. The browser HTTP client times out at 5,000 ms and prompts the user to "Retry". The customer clicks Pay again. Meanwhile, the first charge actually succeeded in Stripe 200 ms after the client gave up. Simultaneously, a Kafka broker rebalance duplicates the <code>OrderCreated</code> event to the inventory service.
+                    </p>
+                  </div>
+                  <div class="case-part">
+                    <strong>The Customer Impact:</strong>
+                    <p>
+                      Customer is charged $150.00 twice ($300.00 total). Inventory is decremented twice for 1 order, creating an artificial stockout and cancelled orders for other customers. Company incurs credit card dispute fees and customer churn.
+                    </p>
+                  </div>
+                  <div class="case-part highlight">
+                    <strong>How WRL Detects &amp; Solves It:</strong>
+                    <p>
+                      In pre-production staging, the team runs <code>SCEN_PAYMENT_TIMEOUT</code> and <code>SCEN_DUP_MESSAGE</code>. WRL immediately raises an <code>INV_NO_DOUBLE_CHARGE</code> violation and flags <code>DUPLICATE_EVENT</code> on inventory. Engineers adopt cart-hash idempotency keys and transactional inboxes before launching the sale!
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Real Scenario 2 -->
+              <div class="case-study-card">
+                <div class="case-study-header">
+                  <span class="case-badge fintech">FINTECH &amp; PAYMENTS</span>
+                  <h3>Scenario 2: Excess Refunds &amp; Silent Ledger Drift</h3>
+                </div>
+                <div class="case-study-body">
+                  <div class="case-part">
+                    <strong>The Failure:</strong>
+                    <p>
+                      A customer returns an expensive $1,200.00 item. A support agent approves a $300.00 goodwill concession while the automated return warehouse worker approves a $1,200.00 refund simultaneously. Due to lack of distributed locking, both workers read the captured amount ($1,200.00) and approve their respective refunds concurrently.
+                    </p>
+                  </div>
+                  <div class="case-part">
+                    <strong>The Customer Impact:</strong>
+                    <p>
+                      $300.00 + $1,200.00 = <strong>$1,500.00 refunded on a $1,200.00 charge</strong>! The business loses $300.00 of hard capital directly from their merchant bank balance. Internal ledger balances drift out of compliance with financial regulators.
+                    </p>
+                  </div>
+                  <div class="case-part highlight">
+                    <strong>How WRL Detects &amp; Solves It:</strong>
+                    <p>
+                      WRL's <code>INV_REFUND_CEILING</code> evaluates every payment event against the mathematical assertion: <code>Sum(Refunds) &lt;= CapturedAmount</code>. The excess refund is blocked with cryptographic audit logging, and automated alerts are fired to Slack/PagerDuty via outgoing webhooks.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Real Scenario 3 -->
+              <div class="case-study-card">
+                <div class="case-study-header">
+                  <span class="case-badge logistics">LOGISTICS &amp; IOT</span>
+                  <h3>Scenario 3: Out-of-Order Webhooks &amp; State Inversion</h3>
+                </div>
+                <div class="case-study-body">
+                  <div class="case-part">
+                    <strong>The Failure:</strong>
+                    <p>
+                      A courier delivers a package inside an underground garage with no cell reception. The mobile app buffers the <code>PACKAGE_PICKED_UP</code> event. When emerging into 5G coverage, the subsequent <code>PACKAGE_DELIVERED</code> event transmits first, and the buffered pickup event arrives 5 seconds later.
+                    </p>
+                  </div>
+                  <div class="case-part">
+                    <strong>The Customer Impact:</strong>
+                    <p>
+                      The order state machine receives <code>DELIVERED</code> while in the initial state, throwing an unhandled <code>IllegalStateException</code>. The courier cannot accept future assignments, and the customer receives an SMS saying "Your order is picked up" after already receiving the goods.
+                    </p>
+                  </div>
+                  <div class="case-part highlight">
+                    <strong>How WRL Detects &amp; Solves It:</strong>
+                    <p>
+                      WRL's Anomaly Engine detects <code>OUT_OF_ORDER_EVENT</code> and flags <code>INV_NO_DUP_TRANSITION</code>. The execution timeline visualizes the inverted sequence, recommending sequence versioning or Lamport clocks.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Real Scenario 4 -->
+              <div class="case-study-card">
+                <div class="case-study-header">
+                  <span class="case-badge arch">ARCHITECTURE MIGRATION</span>
+                  <h3>Scenario 4: Monolith Decomposition &amp; Saga Compensation Failure</h3>
+                </div>
+                <div class="case-study-body">
+                  <div class="case-part">
+                    <strong>The Failure:</strong>
+                    <p>
+                      A company migrates an ACID monolith transaction to a distributed Saga across Order, Payment, and Shipping microservices. During execution, Step 3 (Shipping) encounters an out-of-memory error. The compensating transaction to refund the customer fails silently due to a dead-letter queue misconfiguration.
+                    </p>
+                  </div>
+                  <div class="case-part">
+                    <strong>The Customer Impact:</strong>
+                    <p>
+                      Customer was charged, no order was fulfilled, and no refund was issued. The customer must contact support to discover why their money disappeared.
+                    </p>
+                  </div>
+                  <div class="case-part highlight">
+                    <strong>How WRL Detects &amp; Solves It:</strong>
+                    <p>
+                      WRL monitors distributed trace spans and flags <code>INV_SAGA_COMPENSATION</code> when a failed step is not followed by expected compensating transactions within the configured SLA window. An Incident is automatically declared with AI root-cause diagnosis.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Customer Questions Answered -->
+            <div class="faq-accordion-box mt-4">
+              <h2 class="sub-h2">Frequently Asked Customer &amp; Executive Questions</h2>
+              
+              <div class="faq-item-card">
+                <h4>Q: "We already have Datadog, Grafana, and Sentry. Why do we need Workflow Reliability Lab?"</h4>
+                <p>
+                  <strong>APMs monitor infrastructure health; WRL verifies business correctness.</strong><br>
+                  Datadog tells you CPU is at 80% or that an HTTP endpoint is slow. Sentry tells you an unhandled exception occurred. Neither system understands business invariants: they cannot tell you that a customer was charged twice, that a refund exceeded the captured amount, or that an event was dropped. WRL bridges this gap with deterministic invariant verification and chaos simulation.
+                </p>
+              </div>
+
+              <div class="faq-item-card">
+                <h4>Q: "Do we need to rewrite our services or databases to use this?"</h4>
+                <p>
+                  <strong>No. WRL is 100% non-invasive.</strong><br>
+                  You can use WRL purely as a pre-production chaos testbed without modifying any production code. When ready for telemetry, you can simply point your existing OpenTelemetry exporter (1 line of configuration) to WRL or emit lightweight events using our Java or Python SDKs.
+                </p>
+              </div>
+
+              <div class="faq-item-card">
+                <h4>Q: "What is the concrete business ROI?"</h4>
+                <p>
+                  Preventing a single Black Friday double-charge or excess refund glitch saves tens of thousands in capital loss, dispute fees, and customer support costs. Furthermore, mean time to diagnosis (MTTD) for complex distributed systems incidents drops from days to minutes.
+                </p>
+              </div>
+
+              <div class="faq-item-card">
+                <h4>Q: "What is our team's adoption path from Day 1 to Production?"</h4>
+                <div class="steps-mini-grid">
+                  <div class="mini-step">
+                    <span class="badge badge-info">STAGE 1: DAY 1</span>
+                    <strong>Zero-Code Chaos Sandbox</strong>
+                    <p>Run 15 chaos scenarios in WRL to train engineers on distributed systems failure modes.</p>
+                  </div>
+                  <div class="mini-step">
+                    <span class="badge badge-warning">STAGE 2: WEEK 1</span>
+                    <strong>Shadow Telemetry Ingest</strong>
+                    <p>Route OpenTelemetry trace spans and webhook events to WRL API keys from staging.</p>
+                  </div>
+                  <div class="mini-step">
+                    <span class="badge badge-success">STAGE 3: WEEK 2</span>
+                    <strong>Automated CI/CD Quality Gate</strong>
+                    <p>Add WRL invariant assertions to GitHub Actions. Block PR merges if invariant violations occur!</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- PUBLISHING & GO-TO-MARKET RUNBOOK TAB -->
+          <section *ngIf="activeTab() === 'publishing'" class="doc-section">
+            <div class="section-badge-top">PRODUCTION DEPLOYMENT RUNBOOK</div>
+            <h1>How to Publish &amp; Deploy Workflow Reliability Lab Right Now</h1>
+            <p class="lead">
+              A comprehensive blueprint for publishing this platform to a live production environment with high availability, SSL encryption, and enterprise security.
+            </p>
+
+            <!-- Production Architecture -->
+            <div class="guide-card trap-card">
+              <div class="card-icon cyan-glow">🏛️</div>
+              <div class="card-body">
+                <h3>Production Architecture Blueprint</h3>
+                <p>Workflow Reliability Lab is engineered as a cloud-native, 12-factor distributed system:</p>
+                <ul>
+                  <li><strong>Frontend:</strong> Angular 22 Single Page App compiled to static assets, served via high-performance Nginx with HTTP/2 and Brotli/gzip compression.</li>
+                  <li><strong>Backend:</strong> Spring Boot 3.4.3 container running on Java 21 with Virtual Threads (Project Loom) for high-throughput asynchronous execution.</li>
+                  <li><strong>Database:</strong> Managed PostgreSQL 16 (AWS RDS, GCP Cloud SQL, or Supabase) with HikariCP connection pooling and JSONB indexing.</li>
+                  <li><strong>Security &amp; Edge:</strong> Nginx / Cloudflare reverse proxy with automated Let's Encrypt TLS 1.3 encryption and HSTS headers.</li>
+                </ul>
+              </div>
+            </div>
+
+            <!-- Option 1: Docker Compose -->
+            <div class="deploy-code-box mt-3">
+              <h3>Option A: Instant Production Deployment via Docker Compose</h3>
+              <p>Save this configuration as <code>docker-compose.prod.yml</code> on your production host:</p>
+              <pre class="code-block font-mono"><code>version: '3.8'
+
+services:
+  wrl-postgres:
+    image: postgres:16-alpine
+    container_name: wrl-postgres-prod
+    restart: always
+    environment:
+      POSTGRES_DB: workflow_reliability_lab
+      POSTGRES_USER: wrl_user
+      POSTGRES_PASSWORD: $&#123;DB_PASSWORD:-StrongSecurePassword2026!&#125;
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wrl_user -d workflow_reliability_lab"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  wrl-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wrl-backend-prod
+    restart: always
+    depends_on:
+      wrl-postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://wrl-postgres:5432/workflow_reliability_lab
+      SPRING_DATASOURCE_USERNAME: wrl_user
+      SPRING_DATASOURCE_PASSWORD: $&#123;DB_PASSWORD:-StrongSecurePassword2026!&#125;
+      JWT_SECRET: $&#123;JWT_SECRET:-9vA4bC8...secureProductionSecretKey64CharsMin&#125;
+      CORS_ALLOWED_ORIGINS: "https://wrl.yourcompany.com"
+      SERVER_PORT: 8085
+
+  wrl-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: wrl-frontend-prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - wrl-backend
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+
+volumes:
+  postgres_prod_data:</code></pre>
+            </div>
+
+            <!-- Production Nginx Conf -->
+            <div class="deploy-code-box mt-3">
+              <h3>Production Nginx Reverse Proxy Configuration (<code>nginx.conf</code>)</h3>
+              <pre class="code-block font-mono"><code>server &#123;
+    listen 80;
+    server_name wrl.yourcompany.com;
+    return 301 https://$host$request_uri;
+&#125;
+
+server &#123;
+    listen 443 ssl http2;
+    server_name wrl.yourcompany.com;
+
+    ssl_certificate /etc/letsencrypt/live/wrl.yourcompany.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/wrl.yourcompany.com/privkey.pem;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Angular SPA Route Fallback
+    location / &#123;
+        try_files $uri $uri/ /index.html;
+    &#125;
+
+    # Backend REST API Proxy
+    location /api/ &#123;
+        proxy_pass http://wrl-backend:8085;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    &#125;
+&#125;</code></pre>
+            </div>
+
+            <!-- Option 2: Cloud Run -->
+            <div class="deploy-code-box mt-3">
+              <h3>Option B: Cloud-Native Serverless (Google Cloud Run &amp; Cloud SQL)</h3>
+              <p>Deploy in 2 commands with automatic horizontal autoscaling:</p>
+              <pre class="code-block font-mono"><code># 1. Build &amp; Deploy Backend Container
+gcloud run deploy wrl-backend \
+  --image gcr.io/my-project/wrl-backend \
+  --platform managed \
+  --region us-central1 \
+  --add-cloudsql-instances my-project:us-central1:wrl-db \
+  --set-env-vars "SPRING_DATASOURCE_URL=jdbc:postgresql:///workflow_reliability_lab?cloudSqlInstance=my-project:us-central1:wrl-db&amp;socketFactory=com.google.cloud.sql.postgres.SocketFactory,SPRING_DATASOURCE_USERNAME=postgres,SPRING_DATASOURCE_PASSWORD=secret"
+
+# 2. Deploy Frontend Static Container
+gcloud run deploy wrl-frontend \
+  --image gcr.io/my-project/wrl-frontend \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated</code></pre>
+            </div>
+
+            <!-- Production Checklist -->
+            <div class="checklist-card mt-3">
+              <h3>Production Pre-Flight Security Checklist</h3>
+              <div class="check-grid">
+                <div class="check-item">
+                  <span class="check-icon">✓</span>
+                  <div>
+                    <strong>Cryptographic JWT Secret:</strong> Set a 512-bit random secret in <code>JWT_SECRET</code>.
+                  </div>
+                </div>
+                <div class="check-item">
+                  <span class="check-icon">✓</span>
+                  <div>
+                    <strong>CORS Lockdown:</strong> Set <code>CORS_ALLOWED_ORIGINS</code> strictly to your production domain.
+                  </div>
+                </div>
+                <div class="check-item">
+                  <span class="check-icon">✓</span>
+                  <div>
+                    <strong>Database Credentials:</strong> Use managed Cloud SQL / RDS with SSL connection strings.
+                  </div>
+                </div>
+                <div class="check-item">
+                  <span class="check-icon">✓</span>
+                  <div>
+                    <strong>API Key Security:</strong> Only SHA-256 hashes are stored in the database; raw keys are displayed once.
+                  </div>
+                </div>
+                <div class="check-item">
+                  <span class="check-icon">✓</span>
+                  <div>
+                    <strong>Audit Logging:</strong> All administrative and simulation actions are logged to immutable journals.
+                  </div>
+                </div>
+                <div class="check-item">
+                  <span class="check-icon">✓</span>
+                  <div>
+                    <strong>TLS 1.3 &amp; HSTS:</strong> All HTTP traffic is redirected to HTTPS with security headers enabled.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
           <section *ngIf="activeTab() === 'invariants'" class="doc-section">
             <div class="section-badge-top">DETERMINISTIC VERIFICATION</div>
             <h1>8 Business Invariant Rules Explained</h1>
@@ -1220,6 +1580,194 @@ client.publish_event(
       margin: 0;
       line-height: 1.5;
     }
+    .real-life-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .case-study-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .case-study-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .case-study-header h3 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin: 0;
+    }
+    .case-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.25rem 0.6rem;
+      border-radius: var(--radius-sm);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .case-badge.ecom {
+      background: rgba(245, 158, 11, 0.15);
+      color: #f59e0b;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+    .case-badge.fintech {
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .case-badge.logistics {
+      background: rgba(59, 130, 246, 0.15);
+      color: #3b82f6;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    .case-badge.arch {
+      background: rgba(139, 92, 246, 0.15);
+      color: #8b5cf6;
+      border: 1px solid rgba(139, 92, 246, 0.3);
+    }
+    .case-study-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .case-part {
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+    .case-part strong {
+      color: var(--text-primary);
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+    .case-part p {
+      color: var(--text-secondary);
+      margin: 0;
+    }
+    .case-part.highlight {
+      background: rgba(6, 182, 212, 0.06);
+      border-left: 3px solid var(--accent-cyan);
+      padding: 0.75rem 1rem;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    }
+    .case-part.highlight p {
+      color: var(--text-primary);
+    }
+    .faq-accordion-box {
+      margin-top: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .sub-h2 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .faq-item-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1.25rem;
+    }
+    .faq-item-card h4 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--accent-blue);
+      margin-bottom: 0.5rem;
+    }
+    .faq-item-card p {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      margin: 0;
+      line-height: 1.6;
+    }
+    .steps-mini-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-top: 0.75rem;
+    }
+    .mini-step {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .mini-step strong {
+      font-size: 0.85rem;
+    }
+    .mini-step p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin: 0;
+    }
+    .deploy-code-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .deploy-code-box h3 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .checklist-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .checklist-card h3 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+    .check-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+    .check-icon {
+      background: rgba(16, 185, 129, 0.2);
+      color: #10b981;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .mt-3 {
+      margin-top: 1.25rem;
+    }
+    .mt-4 {
+      margin-top: 2rem;
+    }
     @media (max-width: 900px) {
       .docs-container {
         flex-direction: column;
@@ -1229,7 +1777,7 @@ client.publish_event(
         position: static;
         height: auto;
       }
-      .capabilities-quad, .invariants-detail-grid {
+      .capabilities-quad, .invariants-detail-grid, .steps-mini-grid, .check-grid {
         grid-template-columns: 1fr;
       }
     }

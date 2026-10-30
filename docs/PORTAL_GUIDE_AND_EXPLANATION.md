@@ -213,15 +213,353 @@ Below the KPI cards:
 
 ---
 
-## 4. Summary of Running Ports
+## 4. Real-World Scenarios: How Production Systems Fail & How WRL Solves Them
 
-| Service | Port | Description |
-|---|---|---|
-| **Frontend (Angular 22)** | `4200` | Web UI running on `http://localhost:4200` |
-| **Backend (Spring Boot 3.4.3)** | `8085` | REST API & Ingest running on `http://localhost:8085` |
-| **PostgreSQL 16** | `5433` | Docker container `wrl-postgres` |
-| **MailHog SMTP** | `1025` | Mock email delivery container `wrl-mailhog` |
-| **MailHog Web UI** | `8025` | Web inbox viewer on `http://localhost:8025` |
+Distributed systems don't fail because the code is bad; they fail because the **network is asynchronous, unreliable, and prone to silent anomalies**. Here are 4 concrete, real-life production incidents and how Workflow Reliability Lab protects you.
+
+---
+
+### Scenario A: E-Commerce Black Friday Surge (Double Charges & Kafka Duplication)
+
+#### The Production Incident
+During a flash sale, high database contention causes the `PaymentService` to take 5,200 ms to answer the API Gateway. The HTTP client in the web checkout times out at 5,000 ms. 
+1. The user's browser displays: *"Payment failed, please try again."*
+2. The user clicks **"Pay Now"** a second time.
+3. However, the first payment charge **actually succeeded** in Stripe 200 ms after the client gave up!
+4. The second payment also succeeds with a newly generated checkout transaction ID.
+5. Meanwhile, a Kafka broker rebalance occurs due to pod rescheduling, delivering the `OrderCreated` event to the `InventoryService` twice. The warehouse reserve counter decrements stock twice for one customer.
+
+#### The Consequence
+- The customer was charged \$150.00 twice (\$300.00 total).
+- 2 items were removed from inventory, causing an artificial stockout and cancelled orders for other shoppers.
+- Customer files a credit card dispute, incurring \$25.00 in chargeback penalty fees plus customer support labor.
+
+#### How Workflow Reliability Lab Prevents It
+1. **Pre-Production Chaos Simulation:** The engineering team runs `SCEN_PAYMENT_TIMEOUT` and `SCEN_DUP_MESSAGE` in WRL's Failure Scenario Lab.
+2. **Instant Invariant Violation:** WRL evaluates `INV_NO_DOUBLE_CHARGE` and immediately flags:
+   ```json
+   {
+     "invariant": "INV_NO_DOUBLE_CHARGE",
+     "violation": "Customer cust_user_8912 charged 2 times for order ord_blackfriday_4410",
+     "charges": ["ch_stripe_881", "ch_stripe_882"]
+   }
+   ```
+3. **Automated Anomaly Detection:** The Anomaly engine flags `DUPLICATE_EVENT` for the repeated `StockReserved` step.
+4. **The Fix:** The team adopts deterministic idempotency keys generated from the cart hash (`idem_cart_sha256`) and adds a Transactional Inbox table to the inventory service before launching the sale.
+
+---
+
+### Scenario B: FinTech & Payment Rails (Excess Refunds & Silent Ledger Drift)
+
+#### The Production Incident
+A customer returns an expensive laptop (\$1,200.00). In a distributed microservice setup:
+1. Customer support agent 1 approves a partial goodwill refund of \$300.00.
+2. Simultaneously, an automated returns processing worker receives the physical return package at the depot and triggers a full refund of \$1,200.00.
+3. Both services execute concurrently. Because of read-modify-write race conditions in distributed databases without distributed locking, both check that the original transaction was \$1,200.00 and proceed to dispatch refund requests.
+
+#### The Consequence
+- \$300.00 + \$1,200.00 = **\$1,500.00 refunded** on a \$1,200.00 purchase!
+- The company loses \$300.00 of hard capital directly from their merchant settlement account.
+- The company's internal ledger shows \$1,200.00 captured and \$1,500.00 refunded, breaking accounting audit compliance.
+
+#### How Workflow Reliability Lab Prevents It
+1. The team uses WRL's **Payment Simulator & Ledger Sandbox (`/payments`)**.
+2. When multiple refund webhooks or API requests arrive for the same payment session, WRL's `INV_REFUND_CEILING` invariant evaluates:
+   $$\sum \text{Refunds} \le \text{Captured Amount}$$
+3. The platform instantly triggers an invariant violation alert, rejects the excessive transaction, and records an immutable audit log.
+4. In production, teams connect WRL's Invariant Verification API into their staging payment pipelines to guarantee that no build can be deployed if refund ceiling checks can be bypassed.
+
+---
+
+### Scenario C: Logistics & On-Demand Delivery (Out-of-Order Lifecycle Events)
+
+#### The Production Incident
+In an on-demand grocery delivery platform:
+1. The courier's mobile app enters an underground parking garage with zero cell reception right after picking up the order (`ORDER_PICKED_UP`).
+2. The courier delivers the groceries to the doorstep and reconnects to 5G network.
+3. The phone's offline event queue flushes out of order or experiences HTTP retry delays: the `PACKAGE_DELIVERED` event reaches the message broker at `14:02:10`, while the buffered `PACKAGE_PICKED_UP` event arrives at `14:02:15`.
+
+#### The Consequence
+- The Order Fulfillment state machine receives `DELIVERED` while still in the `CREATED` state.
+- The workflow transitions into an illegal state or throws an unhandled `IllegalStateException`, locking the courier's app from receiving future jobs.
+- The customer receives an SMS saying "Your order is picked up" 5 minutes *after* eating the food!
+
+#### How Workflow Reliability Lab Prevents It
+1. The team runs `SCEN_OUT_OF_ORDER` in WRL.
+2. WRL's `OUT_OF_ORDER_EVENT` rule compares the event timestamps and state transition sequence.
+3. The engine flags the anomaly, displays the visual waterfall timeline showing the inverted step order, and provides code recommendations to implement event versioning / monotonic state progression.
+
+---
+
+### Scenario D: Microservices Migration (Monolith to Distributed Saga)
+
+#### The Production Incident
+An engineering team decomposes a monolithic database into three separate services: `OrderService`, `PaymentService`, and `NotificationService`.
+1. In the monolith, this was a single ACID database transaction: `BEGIN ... COMMIT`.
+2. In microservices, they implement a distributed Saga using RabbitMQ.
+3. `OrderService` creates the order.
+4. `PaymentService` successfully debits the customer's balance.
+5. `NotificationService` throws an unhandled OutOfMemory error.
+6. The compensating transaction to refund the customer's balance fails because the compensating message was sent to a dead-letter queue without retry handling.
+
+#### The Consequence
+- The customer's money was taken, no order was created, no email was sent, and no compensation occurred.
+- Customer support has to manually inspect server logs to understand who lost money and why.
+
+#### How Workflow Reliability Lab Prevents It
+1. The team routes execution telemetry to WRL's OpenTelemetry trace collector.
+2. WRL generates an execution trace waterfall clearly displaying that `NotificationService` failed and that no compensating `PAYMENT_REFUNDED` event was observed within the expected SLA window (`INV_SAGA_COMPENSATION`).
+3. An automated Incident is declared with the full trace timeline attached, allowing engineers to fix the saga orchestrator before customer impact.
+
+---
+
+## 5. Customer Questions & Objections Answered (The GTM Playbook)
+
+### Q1: "We already have Datadog, Grafana, and Sentry. Why do we need Workflow Reliability Lab?"
+> **The Key Distinction: Infrastructure APM vs. Business Invariant Correctness.**
+>
+> - **Datadog / Grafana:** Tell you that *CPU is at 85%* or that *HTTP p99 latency is 450 ms*. They do NOT know that a customer was charged twice or that a refund exceeded the captured amount.
+> - **Sentry:** Tells you that a *NullPointerException occurred at line 42*. It does NOT tell you that step 4 executed before step 2, leaving your database in an inconsistent state.
+> - **Workflow Reliability Lab:** Specifically monitors **business invariants**, **event ordering**, **idempotency failures**, and **distributed saga compensations**. It provides deterministic proof that your business rules hold true even when infrastructure is failing.
+
+| Capability | Datadog / Grafana | Sentry | Workflow Reliability Lab |
+|---|---|---|---|
+| Infrastructure CPU/RAM Metrics | ✅ Native | ❌ No | ❌ (Not our focus) |
+| Exception Stack Traces | ✅ Yes | ✅ Native | ✅ Yes |
+| Distributed Trace Waterfalls | ✅ Yes | ⚠️ Basic | ✅ Yes (OpenTelemetry Native) |
+| Business Invariant Verification | ❌ No | ❌ No | ✅ **Automated & Real-time** |
+| Built-in Fault Injection / Chaos | ❌ No | ❌ No | ✅ **15 Pre-built Scenarios** |
+| Payment Ledger Reconciliation | ❌ No | ❌ No | ✅ **Built-in Gateway Sandbox** |
+| Idempotency & Duplicate Checks | ❌ No | ❌ No | ✅ **Automated Anomaly Rules** |
+| AI Postmortem Generation | ⚠️ Generic | ⚠️ Generic | ✅ **Root-Cause Rooted in Traces** |
+
+---
+
+### Q2: "Do we need to rewrite our backend code to use this?"
+> **No. WRL is completely non-invasive.**
+>
+> 1. **Option A (Zero Code Changes — Pure Sandbox):** You can run WRL as a standalone test environment. Test your architectural ideas, simulate failure scenarios, and train junior developers on distributed systems anti-patterns.
+> 2. **Option B (1-Line OpenTelemetry Exporter):** If your services already use OpenTelemetry, simply point your exporter endpoint to WRL:
+>    ```bash
+>    export OTEL_EXPORTER_OTLP_ENDPOINT="http://wrl.company.internal:8085/api/v1/traces"
+>    ```
+> 3. **Option C (Lightweight SDKs):** Emit lightweight lifecycle events with our Java or Python SDKs using 3 lines of code.
+
+---
+
+### Q3: "What is the concrete ROI for our company?"
+> 1. **Direct Financial Savings:** Preventing a single Black Friday double-charge or excess refund glitch can save \$50,000 to \$500,000 in immediate capital loss, chargeback disputes, and merchant processing penalties.
+> 2. **Engineering Velocity:** Reproducing asynchronous bugs in distributed systems typically takes senior engineers **3 to 7 days**. With WRL's event timeline, trace waterfalls, and scenario replay, mean time to diagnosis (MTTD) drops from **days to minutes**.
+> 3. **Brand Reputation:** Customers lose trust when charged twice or when delivery notifications fail. WRL prevents silent corruption before users notice.
+
+---
+
+### Q4: "How does a novice or junior developer use this without getting overwhelmed?"
+> WRL is built with a **guided progressive disclosure UX**:
+> 1. **Visual Status Colors:** Every execution, anomaly, and invariant is color-coded (`COMPLETED` in emerald green, `FAILED` in rose red, `TIMED_OUT` in amber).
+> 2. **Human-Readable Explanations:** The platform explains *why* an anomaly was triggered in plain English before showing raw JSON payloads.
+> 3. **Interactive Demos:** The Payment Sandbox and Chaos Scenarios allow junior engineers to click buttons and immediately observe the consequences of distributed failures safely.
+
+---
+
+## 6. Customer 3-Step Adoption Playbook
+
+Adopting Workflow Reliability Lab inside an organization takes three simple stages:
+
+```
+┌─────────────────────────────────┐
+│     STAGE 1: DAY 1              │
+│ Pre-Production Chaos Sandbox    │ ──► Zero production risk. Train team on 15 chaos scenarios.
+└────────────────┬────────────────┘
+                 │
+┌────────────────▼────────────────┐
+│     STAGE 2: WEEK 1             │
+│ Shadow Telemetry Ingestion      │ ──► Route OTel spans & webhooks to WRL API keys.
+└────────────────┬────────────────┘
+                 │
+┌────────────────▼────────────────┐
+│     STAGE 3: WEEK 2             │
+│ Automated CI/CD Quality Gate    │ ──► Fail Pull Requests automatically on invariant violations!
+└─────────────────────────────────┘
+```
+
+1. **Stage 1 (Day 1 - Zero Setup):** Run pre-built chaos scenarios in WRL console. Observe how network timeouts, duplicate events, and out-of-order deliveries behave.
+2. **Stage 2 (Week 1 - Passive Ingest):** Create a Workspace API key (`/api-keys`). Configure your staging microservices or message broker consumers to emit trace spans and step events to WRL.
+3. **Stage 3 (Week 2 - Continuous Gate):** Add a step to your GitHub Actions / GitLab CI pipeline:
+   ```yaml
+   - name: Verify Workflow Invariants
+     run: |
+       curl -X POST https://wrl.company.internal/api/v1/workspaces/$WS_ID/scenarios/run-all \
+         -H "Authorization: Bearer ${{ secrets.WRL_API_KEY }}"
+   ```
+   If any invariant check fails, the pull request cannot merge!
+
+---
+
+## 7. How to Publish & Go to Market Now (Production Deployment Runbook)
+
+To take Workflow Reliability Lab and publish it to production right now:
+
+### Production Architecture
+- **Frontend:** Compiled Angular 22 SPA served via high-performance Nginx with HTTP/2 and gzip/brotli compression.
+- **Backend:** Spring Boot 3.4.3 container running on Java 21 with Virtual Threads (`-XX:+UseZGC`).
+- **Database:** Managed PostgreSQL 16 (AWS RDS, GCP Cloud SQL, or Supabase) with connection pooling (HikariCP).
+- **Reverse Proxy / SSL:** Automated Let's Encrypt TLS termination via Caddy, Nginx, or Cloudflare.
+
+---
+
+### Option A: Instant Production Deploy with Docker Compose
+
+Save this as `docker-compose.prod.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  # 1. PostgreSQL Database
+  wrl-postgres:
+    image: postgres:16-alpine
+    container_name: wrl-postgres-prod
+    restart: always
+    environment:
+      POSTGRES_DB: workflow_reliability_lab
+      POSTGRES_USER: wrl_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-StrongSecurePassword2026!}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wrl_user -d workflow_reliability_lab"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Spring Boot Core API
+  wrl-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wrl-backend-prod
+    restart: always
+    depends_on:
+      wrl-postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://wrl-postgres:5432/workflow_reliability_lab
+      SPRING_DATASOURCE_USERNAME: wrl_user
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-StrongSecurePassword2026!}
+      JWT_SECRET: ${JWT_SECRET:-9vA4...min64chars...2026SecureProductionSecretKey}
+      CORS_ALLOWED_ORIGINS: "https://wrl.yourdomain.com"
+      SERVER_PORT: 8085
+
+  # 3. Angular Frontend + Nginx Reverse Proxy
+  wrl-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: wrl-frontend-prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - wrl-backend
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+
+volumes:
+  postgres_prod_data:
+```
+
+#### Production Nginx Reverse Proxy Configuration (`nginx.conf`)
+```nginx
+server {
+    listen 80;
+    server_name wrl.yourdomain.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name wrl.yourdomain.com;
+
+    ssl_certificate /etc/letsencrypt/live/wrl.yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/wrl.yourdomain.com/privkey.pem;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Frontend Single Page App Routing
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Backend REST API Proxy
+    location /api/ {
+        proxy_pass http://wrl-backend:8085;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+---
+
+### Option B: Cloud-Native Serverless (Google Cloud Run & Cloud SQL)
+
+1. **Build & Push Containers:**
+   ```bash
+   gcloud builds submit --tag gcr.io/my-project/wrl-backend ./backend
+   gcloud builds submit --tag gcr.io/my-project/wrl-frontend ./frontend
+   ```
+
+2. **Deploy Backend to Cloud Run:**
+   ```bash
+   gcloud run deploy wrl-backend \
+     --image gcr.io/my-project/wrl-backend \
+     --platform managed \
+     --region us-central1 \
+     --allow-unauthenticated \
+     --add-cloudsql-instances my-project:us-central1:wrl-db \
+     --set-env-vars "SPRING_DATASOURCE_URL=jdbc:postgresql:///workflow_reliability_lab?cloudSqlInstance=my-project:us-central1:wrl-db&socketFactory=com.google.cloud.sql.postgres.SocketFactory,SPRING_DATASOURCE_USERNAME=postgres,SPRING_DATASOURCE_PASSWORD=secret"
+   ```
+
+3. **Deploy Frontend to Firebase App Hosting / Cloud Run:**
+   ```bash
+   gcloud run deploy wrl-frontend \
+     --image gcr.io/my-project/wrl-frontend \
+     --platform managed \
+     --region us-central1 \
+     --allow-unauthenticated
+   ```
+
+---
+
+### Production Pre-Flight Security Checklist
+
+Before directing customer traffic to the platform:
+- [x] **Secure JWT Secret:** Set a 512-bit cryptographically random `JWT_SECRET` in production environment variables.
+- [x] **Password Hashing:** Verified BCrypt / Argon2id password encoding with salt rounds.
+- [x] **Database Isolation:** PostgreSQL user permissions restricted to the `workflow_reliability_lab` schema.
+- [x] **CORS Origin Lockdown:** Set `CORS_ALLOWED_ORIGINS` strictly to your production domain (e.g. `https://wrl.company.com`).
+- [x] **API Key Hashing:** API keys are hashed with SHA-256 before database storage; raw keys are displayed only once.
+- [x] **SSL / TLS 1.3:** Enforce HTTPS redirects and HSTS headers.
+- [x] **Audit Logging:** Security-sensitive actions (login, key creation, deletion, simulation) are captured in immutable audit logs.
+
+---
+
+## 8. Summary of Local & Production Endpoints
+
+| Service | Local Dev | Production Target | Description |
+|---|---|---|---|
+| **Frontend UI** | `http://localhost:4200` | `https://wrl.company.com` | Angular 22 Single Page Application |
+| **Backend REST API** | `http://localhost:8085` | `https://wrl.company.com/api` | Spring Boot 3.4.3 & Java 21 Engine |
+| **Swagger UI** | `http://localhost:8085/swagger-ui/index.html` | `/api/swagger-ui/index.html` | Interactive OpenAPI Documentation |
+| **Database** | `localhost:5433` | Managed Cloud SQL / RDS | PostgreSQL 16 Enterprise Storage |
+| **Mail Testing** | `http://localhost:8025` | Production SMTP (SendGrid/SES) | MailHog / Email Verification |
 
 ---
 *Workflow Reliability Lab — Built for engineering teams who take distributed systems resilience seriously.*

@@ -35,6 +35,7 @@ import { WorkspaceMember } from '../../core/models/models';
                 <th>Email</th>
                 <th>Role</th>
                 <th>Added Date</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -59,6 +60,15 @@ import { WorkspaceMember } from '../../core/models/models';
                   </span>
                 </td>
                 <td class="text-xs text-muted">{{ m.createdAt | date:'medium' }}</td>
+                <td>
+                  <button 
+                    *ngIf="m.role !== 'OWNER' && m.userId" 
+                    class="btn btn-secondary btn-sm text-danger" 
+                    (click)="onRemoveMember(m.userId, m.fullName || m.email || 'member')">
+                    Remove
+                  </button>
+                  <span *ngIf="m.role === 'OWNER'" class="text-xs text-muted">Primary Owner</span>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -276,5 +286,18 @@ export class TeamComponent implements OnInit {
         this.loading.set(false);
       }
     });
+  }
+
+  onRemoveMember(userId: string, memberName: string) {
+    const ws = this.workspaceService.currentWorkspace();
+    if (!ws) return;
+
+    if (confirm(`Are you sure you want to remove ${memberName} from this workspace?`)) {
+      this.api.removeWorkspaceMember(ws.id, userId).subscribe({
+        next: () => {
+          this.loadMembers(ws.id);
+        }
+      });
+    }
   }
 }
