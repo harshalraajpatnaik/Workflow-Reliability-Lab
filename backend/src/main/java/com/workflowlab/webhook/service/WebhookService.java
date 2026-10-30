@@ -1,6 +1,7 @@
 package com.workflowlab.webhook.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.workflowlab.audit.service.AuditService;
 import com.workflowlab.common.exception.ResourceNotFoundException;
 import com.workflowlab.webhook.dto.WebhookDtos.*;
 import com.workflowlab.webhook.model.Webhook;
@@ -20,12 +21,14 @@ public class WebhookService {
 
     private final WebhookRepository webhookRepository;
     private final WebhookDeliveryRepository deliveryRepository;
+    private final AuditService auditService;
     private final SecureRandom secureRandom = new SecureRandom();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public WebhookService(WebhookRepository webhookRepository, WebhookDeliveryRepository deliveryRepository) {
+    public WebhookService(WebhookRepository webhookRepository, WebhookDeliveryRepository deliveryRepository, AuditService auditService) {
         this.webhookRepository = webhookRepository;
         this.deliveryRepository = deliveryRepository;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -46,6 +49,18 @@ public class WebhookService {
         webhook.setEnabled(request.enabled());
 
         Webhook saved = webhookRepository.save(webhook);
+
+        auditService.record(
+            workspaceId,
+            null,
+            "WEBHOOK_REGISTERED",
+            "WEBHOOK",
+            saved.getId().toString(),
+            "{\"url\":\"" + saved.getUrl() + "\",\"events\":\"" + eventTypesJson + "\"}",
+            "127.0.0.1",
+            "Web Client"
+        );
+
         return WebhookDto.from(saved);
     }
 
@@ -60,6 +75,17 @@ public class WebhookService {
         Webhook wh = webhookRepository.findByIdAndWorkspaceId(webhookId, workspaceId)
             .orElseThrow(() -> new ResourceNotFoundException("Webhook not found in this workspace"));
         webhookRepository.delete(wh);
+
+        auditService.record(
+            workspaceId,
+            null,
+            "WEBHOOK_DELETED",
+            "WEBHOOK",
+            webhookId.toString(),
+            "{\"url\":\"" + wh.getUrl() + "\"}",
+            "127.0.0.1",
+            "Web Client"
+        );
     }
 
     @Transactional(readOnly = true)

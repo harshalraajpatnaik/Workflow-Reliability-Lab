@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.workflowlab.apikey.dto.ApiKeyDtos.*;
 import com.workflowlab.apikey.model.ApiKey;
 import com.workflowlab.apikey.repository.ApiKeyRepository;
+import com.workflowlab.audit.service.AuditService;
 import com.workflowlab.auth.service.TokenService;
 import com.workflowlab.common.exception.ResourceNotFoundException;
 import java.security.SecureRandom;
@@ -19,12 +20,14 @@ public class ApiKeyService {
 
     private final ApiKeyRepository apiKeyRepository;
     private final TokenService tokenService;
+    private final AuditService auditService;
     private final SecureRandom secureRandom = new SecureRandom();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public ApiKeyService(ApiKeyRepository apiKeyRepository, TokenService tokenService) {
+    public ApiKeyService(ApiKeyRepository apiKeyRepository, TokenService tokenService, AuditService auditService) {
         this.apiKeyRepository = apiKeyRepository;
         this.tokenService = tokenService;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -48,6 +51,18 @@ public class ApiKeyService {
         );
 
         ApiKey saved = apiKeyRepository.save(apiKey);
+
+        auditService.record(
+            workspaceId,
+            userId,
+            "API_KEY_CREATED",
+            "API_KEY",
+            saved.getId().toString(),
+            "{\"name\":\"" + saved.getName() + "\",\"prefix\":\"" + saved.getKeyPrefix() + "\"}",
+            "127.0.0.1",
+            "Web Client"
+        );
+
         return new ApiKeyCreatedResponse(
             ApiKeyDto.from(saved),
             rawKey,
@@ -68,6 +83,17 @@ public class ApiKeyService {
 
         apiKey.revoke();
         apiKeyRepository.save(apiKey);
+
+        auditService.record(
+            workspaceId,
+            apiKey.getCreatedBy(),
+            "API_KEY_REVOKED",
+            "API_KEY",
+            apiKeyId.toString(),
+            "{\"name\":\"" + apiKey.getName() + "\",\"prefix\":\"" + apiKey.getKeyPrefix() + "\"}",
+            "127.0.0.1",
+            "Web Client"
+        );
     }
 
     private String formatScopesJson(String rawScopes) {

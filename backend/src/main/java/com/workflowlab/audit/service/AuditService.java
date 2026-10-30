@@ -3,6 +3,8 @@ package com.workflowlab.audit.service;
 import com.workflowlab.audit.dto.AuditDtos.AuditEventDto;
 import com.workflowlab.audit.model.AuditEvent;
 import com.workflowlab.audit.repository.AuditEventRepository;
+import com.workflowlab.auth.model.User;
+import com.workflowlab.auth.repository.UserRepository;
 import com.workflowlab.common.dto.PageResponse;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
@@ -15,9 +17,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuditService {
 
     private final AuditEventRepository auditRepository;
+    private final UserRepository userRepository;
 
-    public AuditService(AuditEventRepository auditRepository) {
+    public AuditService(AuditEventRepository auditRepository, UserRepository userRepository) {
         this.auditRepository = auditRepository;
+        this.userRepository = userRepository;
     }
 
     @Async
@@ -30,6 +34,12 @@ public class AuditService {
     @Transactional(readOnly = true)
     public PageResponse<AuditEventDto> listAuditEvents(UUID workspaceId, Pageable pageable) {
         Page<AuditEvent> page = auditRepository.findByWorkspaceIdOrderByCreatedAtDesc(workspaceId, pageable);
-        return PageResponse.from(page.map(AuditEventDto::from));
+        return PageResponse.from(page.map(a -> {
+            String email = null;
+            if (a.getUserId() != null) {
+                email = userRepository.findById(a.getUserId()).map(User::getEmail).orElse(null);
+            }
+            return AuditEventDto.from(a, email);
+        }));
     }
 }

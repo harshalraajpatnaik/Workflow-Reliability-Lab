@@ -213,7 +213,124 @@ Below the KPI cards:
 
 ---
 
-## 4. Real-World Scenarios: How Production Systems Fail & How WRL Solves Them
+## 4. How to Setup Connections & Trace Payments/Activities
+
+A developer or engineering team connecting their external applications to Workflow Reliability Lab can choose from 4 straightforward integration methods:
+
+### Step 1: Obtain a Workspace API Key
+1. In the WRL console, navigate to **API Keys** (`/workspace/api-keys`).
+2. Click **Generate New Key**.
+3. Provide a key name (e.g., `Production Checkout Gateway`) and assign scopes (`events:write`, `traces:write`, `scenarios:run`).
+4. Copy the raw key (`wrl_...`). Authenticate all subsequent requests via:
+   ```http
+   Authorization: Bearer wrl_YOUR_RAW_KEY
+   ```
+
+---
+
+### Method 1: Direct REST Event Ingestion (Fastest Setup — 3 Lines of Code)
+Whenever an activity or payment takes place in your application, send an event to WRL:
+
+```bash
+# 1. When the checkout route is initiated:
+curl -X POST http://localhost:8085/api/v1/workspaces/4c2dd3fa-5db1-4b8c-949f-ce2f6d169702/events \
+  -H "Authorization: Bearer wrl_YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "executionId": "order_checkout_9912",
+    "eventType": "PAYMENT_INITIATED",
+    "sourceService": "checkout-service",
+    "idempotencyKey": "idem_order_9912_pay",
+    "payload": "{\"amount\": 99.99, \"currency\": \"USD\", \"customerId\": \"cust_101\"}"
+  }'
+
+# 2. When Stripe/Adyen confirms the charge:
+curl -X POST http://localhost:8085/api/v1/workspaces/4c2dd3fa-5db1-4b8c-949f-ce2f6d169702/events \
+  -H "Authorization: Bearer wrl_YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "executionId": "order_checkout_9912",
+    "eventType": "PAYMENT_CAPTURED",
+    "sourceService": "stripe-webhook-handler",
+    "idempotencyKey": "idem_order_9912_capture",
+    "payload": "{\"amount\": 99.99, \"providerChargeId\": \"ch_3Mtw2...\"}"
+  }'
+```
+
+#### Node.js / Express Checkout Controller Example:
+```javascript
+import axios from 'axios';
+
+// Express checkout route
+app.post('/api/checkout', async (req, res) => {
+  const { orderId, customerId, amount } = req.body;
+
+  // 1. Trace payment start in WRL
+  await axios.post(`http://wrl:8085/api/v1/workspaces/${WS_ID}/events`, {
+    executionId: orderId,
+    eventType: 'PAYMENT_INITIATED',
+    sourceService: 'checkout-api',
+    idempotencyKey: `idem_${orderId}_init`,
+    payload: JSON.stringify({ amount, customerId })
+  }, { headers: { Authorization: `Bearer ${WRL_KEY}` } });
+
+  // 2. Perform payment with Stripe
+  const charge = await stripe.paymentIntents.create({ amount: amount * 100, currency: 'usd' });
+
+  // 3. Trace payment success in WRL
+  await axios.post(`http://wrl:8085/api/v1/workspaces/${WS_ID}/events`, {
+    executionId: orderId,
+    eventType: 'PAYMENT_CAPTURED',
+    sourceService: 'checkout-api',
+    idempotencyKey: `idem_${orderId}_cap`,
+    payload: JSON.stringify({ amount, chargeId: charge.id })
+  }, { headers: { Authorization: `Bearer ${WRL_KEY}` } });
+
+  res.json({ success: true, orderId });
+});
+```
+
+---
+
+### Method 2: OpenTelemetry Distributed Tracing (Zero Manual Event Code)
+If your application uses standard OpenTelemetry agents or SDKs (Spring Boot 3 / Micrometer Tracing, OpenTelemetry Java/Node/Python agents):
+
+1. Set your OpenTelemetry OTLP trace exporter to point to WRL:
+   ```bash
+   export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:8085/api/v1/traces/spans"
+   export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer wrl_YOUR_API_KEY"
+   export OTEL_SERVICE_NAME="payment-service"
+   ```
+2. **Propagate the standard W3C `traceparent` header across HTTP requests:**
+   ```http
+   traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+   ```
+3. WRL automatically correlates the root span, payment gateway calls, and database transactions into an interactive waterfall timeline under **Traces & Executions**.
+
+---
+
+### Method 3: Payment Gateway Webhook Relay (Stripe / Adyen / Razorpay)
+1. Point your payment provider webhook endpoint to WRL:
+   `https://wrl.yourcompany.com/api/v1/workspaces/{workspaceId}/payments/webhook`
+2. Configure the webhook signing secret in WRL.
+3. WRL processes provider webhook payloads, updates the internal ledger, and asserts invariant rules in real time:
+   - `INV_NO_DOUBLE_CHARGE`
+   - `INV_REFUND_CEILING`
+   - `INV_TERMINAL_IMMUTABILITY`
+
+---
+
+### Method 4: Built-in Interactive Payment Sandbox (Test Immediately)
+You do not need an external system to test!
+1. Navigate to **Payments** (`/workspace/payments`) in the sidebar.
+2. Click **Initiate Payment** ($100.00, Customer ID `cust_novice_1`, Fault Mode `NONE` or `GATEWAY_TIMEOUT`).
+3. Click **Refund** and refund $60.00. Then try to refund $50.00.
+4. Watch WRL block the second refund and flag an `INV_REFUND_CEILING` violation!
+5. Navigate to **Security Audit History** (`/workspace/audit`) to view the immutable audit trail of the payment, refund, and reconciliation events.
+
+---
+
+## 5. Real-World Scenarios: How Production Systems Fail & How WRL Solves Them
 
 Distributed systems don't fail because the code is bad; they fail because the **network is asynchronous, unreliable, and prone to silent anomalies**. Here are 4 concrete, real-life production incidents and how Workflow Reliability Lab protects you.
 

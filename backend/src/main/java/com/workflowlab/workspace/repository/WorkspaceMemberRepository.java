@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember, UUID> {
     Optional<WorkspaceMember> findByWorkspaceIdAndUserId(UUID workspaceId, UUID userId);
     List<WorkspaceMember> findByWorkspaceId(UUID workspaceId);
+    List<WorkspaceMember> findByUserId(UUID userId);
     boolean existsByWorkspaceIdAndUserId(UUID workspaceId, UUID userId);
     void deleteByWorkspaceIdAndUserId(UUID workspaceId, UUID userId);
 }

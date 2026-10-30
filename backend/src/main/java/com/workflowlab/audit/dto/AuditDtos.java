@@ -11,6 +11,7 @@ public final class AuditDtos {
         UUID id,
         UUID workspaceId,
         UUID userId,
+        String userEmail,
         String action,
         String resourceType,
         String resourceId,
@@ -18,11 +19,12 @@ public final class AuditDtos {
         String ipAddress,
         Instant createdAt
     ) {
-        public static AuditEventDto from(AuditEvent a) {
+        public static AuditEventDto from(AuditEvent a, String userEmail) {
             return new AuditEventDto(
                 a.getId(),
                 a.getWorkspaceId(),
                 a.getUserId(),
+                userEmail,
                 a.getAction(),
                 a.getResourceType(),
                 a.getResourceId(),
@@ -30,6 +32,10 @@ public final class AuditDtos {
                 a.getIpAddress(),
                 a.getCreatedAt()
             );
+        }
+
+        public static AuditEventDto from(AuditEvent a) {
+            return from(a, null);
         }
     }
 }

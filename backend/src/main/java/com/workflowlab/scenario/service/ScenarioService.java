@@ -1,5 +1,6 @@
 package com.workflowlab.scenario.service;
 
+import com.workflowlab.audit.service.AuditService;
 import com.workflowlab.common.dto.PageResponse;
 import com.workflowlab.common.exception.ResourceNotFoundException;
 import com.workflowlab.scenario.dto.ScenarioDtos.*;
@@ -20,15 +21,18 @@ public class ScenarioService {
     private final ScenarioRepository scenarioRepository;
     private final ScenarioRunRepository scenarioRunRepository;
     private final SimulationEngine simulationEngine;
+    private final AuditService auditService;
 
     public ScenarioService(
         ScenarioRepository scenarioRepository,
         ScenarioRunRepository scenarioRunRepository,
-        SimulationEngine simulationEngine
+        SimulationEngine simulationEngine,
+        AuditService auditService
     ) {
         this.scenarioRepository = scenarioRepository;
         this.scenarioRunRepository = scenarioRunRepository;
         this.simulationEngine = simulationEngine;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
@@ -46,7 +50,20 @@ public class ScenarioService {
     @Transactional
     public ScenarioRunDto runScenario(UUID workspaceId, String scenarioIdentifier, RunScenarioRequest request, UUID userId) {
         Scenario scenario = resolveScenario(scenarioIdentifier);
-        return simulationEngine.executeScenario(workspaceId, scenario, request.environmentId(), userId, request.customFaultConfig());
+        ScenarioRunDto runDto = simulationEngine.executeScenario(workspaceId, scenario, request.environmentId(), userId, request.customFaultConfig());
+
+        auditService.record(
+            workspaceId,
+            userId,
+            "SCENARIO_EXECUTED",
+            "SCENARIO",
+            scenario.getId() != null ? scenario.getId().toString() : scenario.getCode(),
+            "{\"code\":\"" + scenario.getCode() + "\",\"name\":\"" + scenario.getName() + "\",\"status\":\"" + runDto.status() + "\"}",
+            "127.0.0.1",
+            "Failure Scenario Lab"
+        );
+
+        return runDto;
     }
 
     @Transactional(readOnly = true)

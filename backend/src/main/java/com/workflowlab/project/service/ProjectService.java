@@ -1,5 +1,6 @@
 package com.workflowlab.project.service;
 
+import com.workflowlab.audit.service.AuditService;
 import com.workflowlab.common.exception.ConflictException;
 import com.workflowlab.common.exception.ResourceNotFoundException;
 import com.workflowlab.project.dto.ProjectDtos.*;
@@ -19,10 +20,16 @@ public class ProjectService {
 
     private final ProjectRepository projectRepository;
     private final EnvironmentRepository environmentRepository;
+    private final AuditService auditService;
 
-    public ProjectService(ProjectRepository projectRepository, EnvironmentRepository environmentRepository) {
+    public ProjectService(
+        ProjectRepository projectRepository,
+        EnvironmentRepository environmentRepository,
+        AuditService auditService
+    ) {
         this.projectRepository = projectRepository;
         this.environmentRepository = environmentRepository;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
@@ -66,6 +73,17 @@ public class ProjectService {
         );
         List<Environment> savedEnvs = environmentRepository.saveAll(defaultEnvs);
 
+        auditService.record(
+            workspaceId,
+            null,
+            "PROJECT_CREATED",
+            "PROJECT",
+            savedProject.getId().toString(),
+            "{\"name\":\"" + savedProject.getName() + "\"}",
+            "127.0.0.1",
+            "Web Client"
+        );
+
         return ProjectDto.from(savedProject, savedEnvs.stream().map(EnvironmentDto::from).toList());
     }
 
@@ -83,6 +101,18 @@ public class ProjectService {
             env.setSettings(request.settings());
         }
         Environment saved = environmentRepository.save(env);
+
+        auditService.record(
+            workspaceId,
+            null,
+            "ENVIRONMENT_CREATED",
+            "ENVIRONMENT",
+            saved.getId().toString(),
+            "{\"name\":\"" + saved.getName() + "\",\"type\":\"" + saved.getEnvironmentType() + "\"}",
+            "127.0.0.1",
+            "Web Client"
+        );
+
         return EnvironmentDto.from(saved);
     }
 

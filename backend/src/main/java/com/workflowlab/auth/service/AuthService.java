@@ -1,5 +1,6 @@
 package com.workflowlab.auth.service;
 
+import com.workflowlab.audit.service.AuditService;
 import com.workflowlab.auth.dto.*;
 import com.workflowlab.auth.model.RefreshToken;
 import com.workflowlab.auth.model.User;
@@ -38,6 +39,7 @@ public class AuthService {
     private final TokenService tokenService;
     private final PasswordEncoder passwordEncoder;
     private final EmailNotificationService emailService;
+    private final AuditService auditService;
 
     public AuthService(
         UserRepository userRepository,
@@ -46,7 +48,8 @@ public class AuthService {
         WorkspaceMemberRepository workspaceMemberRepository,
         TokenService tokenService,
         PasswordEncoder passwordEncoder,
-        EmailNotificationService emailService
+        EmailNotificationService emailService,
+        AuditService auditService
     ) {
         this.userRepository = userRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -55,6 +58,7 @@ public class AuthService {
         this.tokenService = tokenService;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -134,6 +138,19 @@ public class AuthService {
         Instant refreshExpiry = Instant.now().plusMillis(tokenService.getRefreshExpirationMs());
         RefreshToken rt = new RefreshToken(user.getId(), tokenHash, refreshExpiry, ipAddress, userAgent);
         refreshTokenRepository.save(rt);
+
+        UUID userWsId = workspaceMemberRepository.findByUserId(user.getId()).stream()
+            .map(WorkspaceMember::getWorkspaceId).findFirst().orElse(null);
+        auditService.record(
+            userWsId,
+            user.getId(),
+            "USER_LOGIN",
+            "USER",
+            user.getId().toString(),
+            "{\"email\":\"" + user.getEmail() + "\",\"authMethod\":\"PASSWORD\"}",
+            ipAddress != null ? ipAddress : "127.0.0.1",
+            userAgent != null ? userAgent : "Web Browser"
+        );
 
         AuthResponse authResponse = AuthResponse.of(accessToken, tokenService.getJwtExpirationMs(), UserDto.from(user));
         return new LoginResult(authResponse, rawRefreshToken, refreshExpiry);

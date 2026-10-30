@@ -5,6 +5,7 @@ import { RouterLink, ActivatedRoute } from '@angular/router';
 type DocTab = 
   | 'portal-guide'
   | 'walkthrough'
+  | 'connections'
   | 'real-life'
   | 'publishing'
   | 'overview'
@@ -59,6 +60,9 @@ type DocTab =
             </button>
             <button class="nav-btn" [class.active]="activeTab() === 'walkthrough'" (click)="setTab('walkthrough')">
               <span class="tab-icon">📖</span> Step-by-Step Portal Tour
+            </button>
+            <button class="nav-btn" [class.active]="activeTab() === 'connections'" (click)="setTab('connections')">
+              <span class="tab-icon">🔗</span> Setup Connections &amp; Tracing
             </button>
             <button class="nav-btn" [class.active]="activeTab() === 'real-life'" (click)="setTab('real-life')">
               <span class="tab-icon">🏢</span> Real-Life Customer Playbook
@@ -351,6 +355,197 @@ type DocTab =
                   </ul>
                 </div>
               </div>
+            </div>
+          </section>
+
+          <!-- HOW TO SETUP CONNECTIONS & TRACE PAYMENTS TAB -->
+          <section *ngIf="activeTab() === 'connections'" class="doc-section">
+            <div class="section-badge-top">SETUP CONNECTIONS &amp; TELEMETRY</div>
+            <h1>How to Connect Your App &amp; Trace Every Payment &amp; Action</h1>
+            <p class="lead">
+              A complete, step-by-step developer guide to connecting your services, payment gateways, and background workers so all distributed activities are traced, checked against invariants, and audited.
+            </p>
+
+            <!-- Overview Flow Diagram -->
+            <div class="guide-card trap-card">
+              <div class="card-icon cyan-glow">⚡</div>
+              <div class="card-body">
+                <h3>The End-to-End Tracing Flow</h3>
+                <p>
+                  When your customer clicks "Pay Now" on your website or mobile app, here is how the data flows into Workflow Reliability Lab:
+                </p>
+                <div class="connection-flow-steps">
+                  <div class="c-step">
+                    <span class="c-num">1</span>
+                    <div>
+                      <strong>Your App Checkout</strong>
+                      <p>Generates an execution ID (e.g. <code>ord_9921_pay</code>) and an idempotency key.</p>
+                    </div>
+                  </div>
+                  <div class="c-arrow">→</div>
+                  <div class="c-step">
+                    <span class="c-num">2</span>
+                    <div>
+                      <strong>Telemetry / Events Sent</strong>
+                      <p>Your backend posts events to WRL or exports OpenTelemetry spans using your API Key.</p>
+                    </div>
+                  </div>
+                  <div class="c-arrow">→</div>
+                  <div class="c-step">
+                    <span class="c-num">3</span>
+                    <div>
+                      <strong>Invariants &amp; Audit</strong>
+                      <p>WRL evaluates business rules in real time, flags violations, and records an immutable audit log.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 1. Generate Key -->
+            <div class="deploy-code-box mt-3">
+              <h3>Step 1: Get Your Workspace API Key</h3>
+              <p>
+                All external ingestion requests require a secure workspace-scoped API key:
+              </p>
+              <ol class="step-ol">
+                <li>Navigate to <strong>API Keys</strong> in the left sidebar (<code>/workspace/api-keys</code>).</li>
+                <li>Click <strong>Generate New Key</strong>. Enter a descriptive name like <code>Production Ingest Gateway</code>.</li>
+                <li>Copy your key immediately (starts with <code>wrl_...</code>). Include it in your API requests as:
+                  <pre class="code-block font-mono"><code>Authorization: Bearer wrl_YOUR_SECRET_KEY</code></pre>
+                </li>
+              </ol>
+            </div>
+
+            <!-- 2. Mode A: REST Ingest -->
+            <div class="deploy-code-box mt-3">
+              <h3>Mode A: Direct REST Event Ingestion (Simplest Setup — 3 Lines)</h3>
+              <p>
+                Post lifecycle events directly from your payment service, API gateway, or background worker:
+              </p>
+              
+              <div class="code-lang-label">cURL / HTTP Request Example</div>
+              <pre class="code-block font-mono"><code># 1. When payment starts in your checkout route:
+curl -X POST http://localhost:8085/api/v1/workspaces/4c2dd3fa-5db1-4b8c-949f-ce2f6d169702/events \
+  -H "Authorization: Bearer wrl_YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '&#123;
+    "executionId": "order_checkout_9912",
+    "eventType": "PAYMENT_INITIATED",
+    "sourceService": "checkout-service",
+    "idempotencyKey": "idem_order_9912_pay",
+    "payload": "&#123;\"amount\": 99.99, \"currency\": \"USD\", \"customerId\": \"cust_harshal_1\"&#125;"
+  &#125;'
+
+# 2. When Stripe/Adyen/Payment Gateway confirms the charge:
+curl -X POST http://localhost:8085/api/v1/workspaces/4c2dd3fa-5db1-4b8c-949f-ce2f6d169702/events \
+  -H "Authorization: Bearer wrl_YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '&#123;
+    "executionId": "order_checkout_9912",
+    "eventType": "PAYMENT_CAPTURED",
+    "sourceService": "stripe-webhook-listener",
+    "idempotencyKey": "idem_order_9912_capture",
+    "payload": "&#123;\"amount\": 99.99, \"providerChargeId\": \"ch_3M1982a...\"&#125;"
+  &#125;'</code></pre>
+
+              <div class="code-lang-label mt-3">Node.js / Express Checkout Service Example</div>
+              <pre class="code-block font-mono"><code>import axios from 'axios';
+
+// Call this right before charging the card
+async function tracePaymentStart(orderId, customerId, amount) &#123;
+  await axios.post('http://localhost:8085/api/v1/workspaces/' + WORKSPACE_ID + '/events', &#123;
+    executionId: orderId,
+    eventType: 'PAYMENT_INITIATED',
+    sourceService: 'checkout-service',
+    idempotencyKey: 'idem_' + orderId + '_init',
+    payload: JSON.stringify(&#123; amount, customerId, timestamp: new Date() &#125;)
+  &#125;, &#123;
+    headers: &#123; 'Authorization': 'Bearer ' + WRL_API_KEY &#125;
+  &#125;);
+&#125;
+
+// Call this when Stripe charge succeeds
+async function tracePaymentSuccess(orderId, stripeChargeId, amount) &#123;
+  await axios.post('http://localhost:8085/api/v1/workspaces/' + WORKSPACE_ID + '/events', &#123;
+    executionId: orderId,
+    eventType: 'PAYMENT_CAPTURED',
+    sourceService: 'checkout-service',
+    idempotencyKey: 'idem_' + orderId + '_cap',
+    payload: JSON.stringify(&#123; amount, providerChargeId: stripeChargeId &#125;)
+  &#125;, &#123;
+    headers: &#123; 'Authorization': 'Bearer ' + WRL_API_KEY &#125;
+  &#125;);
+&#125;</code></pre>
+
+              <div class="code-lang-label mt-3">Python / FastAPI / Django Payment Worker Example</div>
+              <pre class="code-block font-mono"><code>import requests, json
+
+def log_wrl_payment_event(execution_id, event_type, payload, idempotency_key):
+    url = f"http://localhost:8085/api/v1/workspaces/&#123;WORKSPACE_ID&#125;/events"
+    headers = &#123;
+        "Authorization": f"Bearer &#123;WRL_API_KEY&#125;",
+        "Content-Type": "application/json"
+    &#125;
+    body = &#123;
+        "executionId": execution_id,
+        "eventType": event_type,
+        "sourceService": "payment-worker",
+        "idempotencyKey": idempotency_key,
+        "payload": json.dumps(payload)
+    &#125;
+    requests.post(url, json=body, headers=headers)
+
+# When refund is issued:
+log_wrl_payment_event(
+    execution_id="order_checkout_9912",
+    event_type="PAYMENT_REFUNDED",
+    payload=&#123;"refundAmount": 40.0, "reason": "customer_request"&#125;,
+    idempotency_key="idem_order_9912_refund_1"
+)</code></pre>
+            </div>
+
+            <!-- 3. Mode B: OpenTelemetry Distributed Traces -->
+            <div class="deploy-code-box mt-3">
+              <h3>Mode B: OpenTelemetry Distributed Tracing (Zero Manual Event Code)</h3>
+              <p>
+                If your microservices use OpenTelemetry agents, WRL natively ingests standard OTel spans and reconstructs the distributed trace waterfall:
+              </p>
+              <pre class="code-block font-mono"><code># Set OpenTelemetry Collector exporter endpoint:
+export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:8085/api/v1/traces/spans"
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer wrl_YOUR_API_KEY"
+export OTEL_SERVICE_NAME="payment-service"</code></pre>
+
+              <p class="mt-2">
+                <strong>W3C Traceparent Header Propagation:</strong> When your API Gateway calls your Payment Service and Inventory Service, pass the standard <code>traceparent</code> header:
+              </p>
+              <pre class="code-block font-mono"><code>traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01</code></pre>
+              <p class="text-sm text-secondary">
+                WRL automatically groups all spans sharing the same <code>traceId</code>, visualizes the exact latency of each microservice step, and flags unhandled errors or circuit breaks.
+              </p>
+            </div>
+
+            <!-- 4. Mode C: Real Payment Sandbox -->
+            <div class="deploy-code-box mt-3">
+              <h3>Mode C: Built-in Interactive Payment Sandbox (Zero Code Needed)</h3>
+              <p>
+                Want to test payments, chaos, and invariants right now inside the portal?
+              </p>
+              <ol class="step-ol">
+                <li>Click <strong>Payments</strong> in the left sidebar (<code>/workspace/payments</code>).</li>
+                <li>Click <strong>Initiate Payment</strong>. Enter Amount: <code>$100.00</code> and Customer ID: <code>cust_novice_1</code>.</li>
+                <li>Choose a fault mode:
+                  <ul>
+                    <li><code>NONE</code> — Normal clean capture.</li>
+                    <li><code>GATEWAY_TIMEOUT</code> — Simulates payment gateway socket timeout (5,200 ms).</li>
+                    <li><code>DUPLICATE_WEBHOOK</code> — Simulates Stripe duplicate webhook delivery.</li>
+                  </ul>
+                </li>
+                <li>Submit the payment and observe the state machine transition to <code>SUCCEEDED</code>.</li>
+                <li>Click <strong>Refund</strong> and refund $60.00. Then click <strong>Refund</strong> again and enter $50.00.</li>
+                <li>Notice how WRL <strong>immediately blocks the refund</strong> and flags an <code>INV_REFUND_CEILING</code> violation!</li>
+                <li>Now click <strong>Security Audit History</strong> in the sidebar (<code>/workspace/audit</code>) to inspect the immutable audit log recording the payment, refund attempt, and timestamps!</li>
+              </ol>
             </div>
           </section>
 
@@ -1768,6 +1963,67 @@ client.publish_event(
     .mt-4 {
       margin-top: 2rem;
     }
+    .connection-flow-steps {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+    .c-step {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 1rem;
+      flex: 1;
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+    }
+    .c-num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      color: #000;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      flex-shrink: 0;
+    }
+    .c-step strong {
+      font-size: 0.875rem;
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+    .c-step p {
+      font-size: 0.775rem;
+      color: var(--text-muted);
+      margin: 0;
+      line-height: 1.4;
+    }
+    .c-arrow {
+      color: var(--accent-cyan);
+      font-size: 1.5rem;
+      font-weight: bold;
+    }
+    .code-lang-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--accent-blue);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.35rem;
+    }
+    .step-ol {
+      margin-left: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
     @media (max-width: 900px) {
       .docs-container {
         flex-direction: column;
@@ -1777,8 +2033,9 @@ client.publish_event(
         position: static;
         height: auto;
       }
-      .capabilities-quad, .invariants-detail-grid, .steps-mini-grid, .check-grid {
+      .capabilities-quad, .invariants-detail-grid, .steps-mini-grid, .check-grid, .connection-flow-steps {
         grid-template-columns: 1fr;
+        flex-direction: column;
       }
     }
   `]

@@ -1,5 +1,6 @@
 package com.workflowlab.payment.service;
 
+import com.workflowlab.audit.service.AuditService;
 import com.workflowlab.common.dto.PageResponse;
 import com.workflowlab.common.exception.BadRequestException;
 import com.workflowlab.common.exception.ConflictException;
@@ -33,15 +34,18 @@ public class PaymentSimulatorService {
     private final PaymentTransactionRepository transactionRepository;
     private final PaymentWebhookRepository webhookRepository;
     private final EventRepository eventRepository;
+    private final AuditService auditService;
 
     public PaymentSimulatorService(
         PaymentTransactionRepository transactionRepository,
         PaymentWebhookRepository webhookRepository,
-        EventRepository eventRepository
+        EventRepository eventRepository,
+        AuditService auditService
     ) {
         this.transactionRepository = transactionRepository;
         this.webhookRepository = webhookRepository;
         this.eventRepository = eventRepository;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -101,6 +105,17 @@ public class PaymentSimulatorService {
 
         PaymentTransaction saved = transactionRepository.save(txn);
 
+        auditService.record(
+            workspaceId,
+            null,
+            "PAYMENT_INITIATED",
+            "PAYMENT",
+            saved.getId().toString(),
+            "{\"reference\":\"" + saved.getTransactionReference() + "\",\"amount\":" + saved.getAmount() + ",\"status\":\"" + saved.getStatus() + "\"}",
+            "127.0.0.1",
+            "Payment Gateway"
+        );
+
         // Create journal event for observability
         if (request.executionId() != null) {
             String eventType = switch (saved.getStatus()) {
@@ -155,6 +170,18 @@ public class PaymentSimulatorService {
         }
 
         PaymentTransaction saved = transactionRepository.save(txn);
+
+        auditService.record(
+            workspaceId,
+            null,
+            "PAYMENT_REFUNDED",
+            "PAYMENT",
+            saved.getId().toString(),
+            "{\"reference\":\"" + saved.getTransactionReference() + "\",\"refundAmount\":" + request.amount() + ",\"newTotalRefunded\":" + newTotalRefunded + "}",
+            "127.0.0.1",
+            "Payment Gateway"
+        );
+
         return PaymentTransactionDto.from(saved);
     }
 
@@ -176,6 +203,18 @@ public class PaymentSimulatorService {
         }
 
         PaymentTransaction saved = transactionRepository.save(txn);
+
+        auditService.record(
+            workspaceId,
+            null,
+            "PAYMENT_RECONCILED",
+            "PAYMENT",
+            saved.getId().toString(),
+            "{\"reference\":\"" + saved.getTransactionReference() + "\",\"reconciliationStatus\":\"" + saved.getReconciliationStatus() + "\"}",
+            "127.0.0.1",
+            "Payment Gateway"
+        );
+
         return PaymentTransactionDto.from(saved);
     }
 

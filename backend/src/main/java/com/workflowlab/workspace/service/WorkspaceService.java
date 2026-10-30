@@ -1,5 +1,6 @@
 package com.workflowlab.workspace.service;
 
+import com.workflowlab.audit.service.AuditService;
 import com.workflowlab.auth.model.User;
 import com.workflowlab.auth.repository.UserRepository;
 import com.workflowlab.common.exception.ConflictException;
@@ -23,15 +24,18 @@ public class WorkspaceService {
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceMemberRepository memberRepository;
     private final UserRepository userRepository;
+    private final AuditService auditService;
 
     public WorkspaceService(
         WorkspaceRepository workspaceRepository,
         WorkspaceMemberRepository memberRepository,
-        UserRepository userRepository
+        UserRepository userRepository,
+        AuditService auditService
     ) {
         this.workspaceRepository = workspaceRepository;
         this.memberRepository = memberRepository;
         this.userRepository = userRepository;
+        this.auditService = auditService;
     }
 
     @Transactional(readOnly = true)
@@ -68,6 +72,17 @@ public class WorkspaceService {
 
         WorkspaceMember ownerMember = new WorkspaceMember(saved.getId(), userId, WorkspaceRole.OWNER);
         memberRepository.save(ownerMember);
+
+        auditService.record(
+            saved.getId(),
+            userId,
+            "WORKSPACE_CREATED",
+            "WORKSPACE",
+            saved.getId().toString(),
+            "{\"name\":\"" + saved.getName() + "\"}",
+            "127.0.0.1",
+            "Web Client"
+        );
 
         return WorkspaceDto.from(saved, WorkspaceRole.OWNER);
     }
@@ -125,6 +140,17 @@ public class WorkspaceService {
         WorkspaceMember member = new WorkspaceMember(workspaceId, invitee.getId(), role);
         WorkspaceMember saved = memberRepository.save(member);
 
+        auditService.record(
+            workspaceId,
+            requestingUserId,
+            "MEMBER_INVITED",
+            "USER",
+            invitee.getId().toString(),
+            "{\"email\":\"" + invitee.getEmail() + "\",\"role\":\"" + role.name() + "\"}",
+            "127.0.0.1",
+            "Web Client"
+        );
+
         return new WorkspaceMemberDto(
             saved.getId(),
             workspaceId,
@@ -148,6 +174,17 @@ public class WorkspaceService {
         }
 
         memberRepository.deleteByWorkspaceIdAndUserId(workspaceId, memberUserId);
+
+        auditService.record(
+            workspaceId,
+            requestingUserId,
+            "MEMBER_REMOVED",
+            "USER",
+            memberUserId.toString(),
+            "{}",
+            "127.0.0.1",
+            "Web Client"
+        );
     }
 
     @Transactional
@@ -166,6 +203,17 @@ public class WorkspaceService {
 
         member.setRole(newRole);
         memberRepository.save(member);
+
+        auditService.record(
+            workspaceId,
+            requestingUserId,
+            "MEMBER_ROLE_UPDATED",
+            "USER",
+            targetUserId.toString(),
+            "{\"newRole\":\"" + newRole.name() + "\"}",
+            "127.0.0.1",
+            "Web Client"
+        );
     }
 
     public void assertMember(UUID workspaceId, UUID userId) {
