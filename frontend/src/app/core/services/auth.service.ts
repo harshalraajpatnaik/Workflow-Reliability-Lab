@@ -72,25 +72,29 @@ export class AuthService {
   private setSession(auth: AuthResponse): void {
     this.accessToken.set(auth.accessToken);
     this.currentUser.set(auth.user);
+    localStorage.setItem('wrl_token', auth.accessToken);
+    localStorage.setItem('wrl_user', JSON.stringify(auth.user));
     sessionStorage.setItem('wrl_user', JSON.stringify(auth.user));
   }
 
   private clearSession(): void {
     this.accessToken.set(null);
     this.currentUser.set(null);
+    localStorage.removeItem('wrl_token');
+    localStorage.removeItem('wrl_user');
     sessionStorage.removeItem('wrl_user');
     this.router.navigate(['/login']);
   }
 
   private restoreSession(): void {
-    const cachedUser = sessionStorage.getItem('wrl_user');
-    if (cachedUser) {
+    const cachedToken = localStorage.getItem('wrl_token');
+    const cachedUser = localStorage.getItem('wrl_user') || sessionStorage.getItem('wrl_user');
+    if (cachedToken && cachedUser) {
       try {
+        this.accessToken.set(cachedToken);
         this.currentUser.set(JSON.parse(cachedUser));
-        // Silently attempt token refresh with refresh cookie
-        this.refreshToken().subscribe();
       } catch (e) {
-        sessionStorage.removeItem('wrl_user');
+        this.clearSession();
       }
     }
   }
