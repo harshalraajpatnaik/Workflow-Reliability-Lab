@@ -1,0 +1,65 @@
+name: Workflow Reliability Lab CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend-build:
+    name: Backend Build & Test (Java 21 / Spring Boot)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: workflow_lab
+          POSTGRES_USER: wrl_user
+          POSTGRES_PASSWORD: wrl_dev_password_change_me_in_prod
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build Spring Boot Backend with Maven
+        run: mvn clean package -DskipTests
+        working-directory: ./backend
+
+  frontend-build:
+    name: Frontend Build & Lint (Node.js 22 / Angular 22)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: frontend/package.json
+
+      - name: Install Frontend Dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: ./frontend
+
+      - name: Build Angular 22 Production Bundle
+        run: npx ng build --configuration production
+        working-directory: ./frontend

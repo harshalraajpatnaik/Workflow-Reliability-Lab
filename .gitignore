@@ -37,6 +37,7 @@ yarn-error.log*
 .vscode/
 .DS_Store
 Thumbs.db
+.agents/
 
 # Docker
 docker-data/
