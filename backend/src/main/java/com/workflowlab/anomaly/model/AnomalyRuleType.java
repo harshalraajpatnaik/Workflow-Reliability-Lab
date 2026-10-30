@@ -1,0 +1,12 @@
+package com.workflowlab.anomaly.model;
+
+public enum AnomalyRuleType {
+    DURATION_THRESHOLD,
+    REPEATED_FAILURES,
+    EXCESSIVE_RETRIES,
+    MISSING_EVENT,
+    DUPLICATE_EVENT,
+    OUT_OF_ORDER_EVENT,
+    LONG_RUNNING_EXECUTION,
+    PAYMENT_INCONSISTENCY
+}

@@ -1,0 +1,10 @@
+.git
+.gitignore
+.env
+node_modules
+target
+dist
+.angular
+*.md
+.idea
+.vscode

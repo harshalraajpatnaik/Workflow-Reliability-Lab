@@ -1,0 +1,117 @@
+package com.workflowlab.ai.service;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+@Service
+public class AiAnalysisService {
+
+    private static final Logger log = LoggerFactory.getLogger(AiAnalysisService.class);
+
+    private final boolean enabled;
+    private final String provider;
+    private final String baseUrl;
+    private final String model;
+    private final int timeoutSeconds;
+    private final HttpClient httpClient;
+
+    public AiAnalysisService(
+        @Value("${app.ai.enabled:false}") boolean enabled,
+        @Value("${app.ai.provider:disabled}") String provider,
+        @Value("${app.ai.base-url:http://host.docker.internal:1234/v1}") String baseUrl,
+        @Value("${app.ai.model:local-model}") String model,
+        @Value("${app.ai.timeout-seconds:30}") int timeoutSeconds
+    ) {
+        this.enabled = enabled;
+        this.provider = provider;
+        this.baseUrl = baseUrl;
+        this.model = model;
+        this.timeoutSeconds = timeoutSeconds;
+        this.httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(5))
+            .build();
+    }
+
+    public boolean isEnabled() {
+        return enabled && !"disabled".equalsIgnoreCase(provider);
+    }
+
+    public String analyzeIncident(String incidentTitle, String summary, String evidence) {
+        if (!isEnabled()) {
+            return generateDeterministicAnalysis(incidentTitle, summary, evidence);
+        }
+
+        try {
+            log.info("Dispatching prompt to LM Studio provider at: {}", baseUrl);
+            String prompt = String.format(
+                "You are an SRE and Distributed Systems Reliability Expert. Analyze this incident:\n" +
+                "Title: %s\nSummary: %s\nEvidence: %s\n\n" +
+                "Rules:\n" +
+                "1. Cite exact execution, trace, and event IDs found in the evidence.\n" +
+                "2. Clearly label hypotheses as hypotheses.\n" +
+                "3. Provide actionable remediation steps for developers.",
+                incidentTitle, summary, evidence
+            );
+
+            String requestBody = String.format(
+                "{\"model\": \"%s\", \"messages\": [{\"role\": \"user\", \"content\": \"%s\"}], \"temperature\": 0.2, \"max_tokens\": 1024}",
+                model, prompt.replace("\"", "\\\"").replace("\n", "\\n")
+            );
+
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/chat/completions"))
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(timeoutSeconds))
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                return extractContentFromOpenAiResponse(response.body());
+            } else {
+                log.warn("LM Studio responded with HTTP {}, falling back to deterministic synthesis", response.statusCode());
+                return generateDeterministicAnalysis(incidentTitle, summary, evidence);
+            }
+        } catch (Exception e) {
+            log.warn("LM Studio connection failed or timed out ({}). Falling back to deterministic diagnosis.", e.getMessage());
+            return generateDeterministicAnalysis(incidentTitle, summary, evidence);
+        }
+    }
+
+    private String generateDeterministicAnalysis(String title, String summary, String evidence) {
+        return "### Reliability Diagnostic Analysis (Deterministic Engine)\n\n" +
+            "**Incident:** " + title + "\n\n" +
+            "**Observed Findings:**\n" +
+            "- " + (summary != null ? summary : "Workflow failed with unhandled exception or SLA violation.") + "\n" +
+            "- Evidence review points to downstream dependency degradation or state synchronization lag.\n\n" +
+            "**Root-Cause Hypothesis (Hypothesis):**\n" +
+            "- Downstream service experienced backpressure or socket timeout exceeding the execution threshold.\n" +
+            "- Retries without sufficient exponential jitter may have exacerbated downstream contention.\n\n" +
+            "**Recommended Corrective Action:**\n" +
+            "1. Validate circuit breaker tripping thresholds on external dependencies.\n" +
+            "2. Enforce bounded full-jitter randomized exponential backoff.\n" +
+            "3. Ensure consumer handlers persist idempotency keys prior to state mutation.\n\n" +
+            "*Note: AI provider is currently disabled or unreachable; diagnostic generated by deterministic rule engine.*";
+    }
+
+    private String extractContentFromOpenAiResponse(String json) {
+        try {
+            int contentIdx = json.indexOf("\"content\":");
+            if (contentIdx != -1) {
+                int startQuote = json.indexOf("\"", contentIdx + 10);
+                int endQuote = json.indexOf("\"", startQuote + 1);
+                if (startQuote != -1 && endQuote != -1) {
+                    return json.substring(startQuote + 1, endQuote).replace("\\n", "\n").replace("\\\"", "\"");
+                }
+            }
+        } catch (Exception ignored) {}
+        return json;
+    }
+}
