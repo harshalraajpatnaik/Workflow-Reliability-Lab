@@ -69,7 +69,7 @@ import { TraceDetail, ServiceGraph } from '../../core/models/models';
             </thead>
             <tbody>
               <tr *ngFor="let t of traces()">
-                <td class="font-mono text-cyan font-bold">{{ t.traceId.substring(0, 16) }}...</td>
+                <td class="font-mono text-cyan font-bold">{{ t.traceId.length > 16 ? t.traceId.substring(0, 16) + '...' : t.traceId }}</td>
                 <td class="font-mono">{{ t.spans ? t.spans.length : 0 }}</td>
                 <td><span class="badge badge-info">{{ t.rootService || 'gateway' }}</span></td>
                 <td class="font-mono text-xs">{{ formatDuration(t.durationMs) }}</td>

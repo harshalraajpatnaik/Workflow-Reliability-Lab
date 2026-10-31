@@ -54,7 +54,7 @@ import { WorkflowEvent } from '../../core/models/models';
                 </td>
                 <td class="text-xs text-muted">{{ ev.createdAt | date:'mediumTime' }}</td>
                 <td>
-                  <button class="btn btn-secondary btn-sm" (click)="viewPayload(ev)" *ngIf="ev.payload">
+                  <button class="btn btn-secondary btn-sm" (click)="viewPayload(ev)" *ngIf="ev.payload || ev.payloadMetadata">
                     View
                   </button>
                 </td>
@@ -257,12 +257,13 @@ export class EventsComponent implements OnInit {
   }
 
   viewPayload(ev: WorkflowEvent) {
-    if (!ev.payload) return;
+    const raw = ev.payload || ev.payloadMetadata;
+    if (!raw) return;
     try {
-      const parsed = JSON.parse(ev.payload);
+      const parsed = JSON.parse(raw);
       this.selectedPayload.set(JSON.stringify(parsed, null, 2));
     } catch (e) {
-      this.selectedPayload.set(ev.payload);
+      this.selectedPayload.set(raw);
     }
   }
 }

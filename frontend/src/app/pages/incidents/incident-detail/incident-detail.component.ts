@@ -261,12 +261,21 @@ export class IncidentDetailComponent implements OnInit {
     const ws = this.workspaceService.currentWorkspace();
     if (!ws || !this.incidentId) return;
 
-    this.api.getIncidents(ws.id, 0, 50).subscribe(res => {
-      if (res.success && res.data) {
-        const found = res.data.content.find(i => i.id === this.incidentId);
-        if (found) {
-          this.incident.set(found);
+    this.api.getIncident(ws.id, this.incidentId).subscribe({
+      next: (res) => {
+        if (res.success && res.data) {
+          this.incident.set(res.data);
         }
+      },
+      error: () => {
+        this.api.getIncidents(ws.id, 0, 50).subscribe(res => {
+          if (res.success && res.data) {
+            const found = res.data.content.find(i => i.id === this.incidentId);
+            if (found) {
+              this.incident.set(found);
+            }
+          }
+        });
       }
     });
   }

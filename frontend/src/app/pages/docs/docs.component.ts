@@ -402,6 +402,28 @@ type DocTab =
               </div>
             </div>
 
+            <!-- Architecture Sufficiency Question Callout -->
+            <div class="guide-card trap-card mt-3">
+              <div class="card-icon cyan-glow">💡</div>
+              <div class="card-body">
+                <h3>Is Connecting Message Brokers (RabbitMQ / Kafka) Alone Sufficient?</h3>
+                <p>
+                  <strong>Short Answer: No single component works in isolation.</strong>
+                </p>
+                <p>
+                  If you configure only a message broker in Integration Architecture, WRL intercepts queue messages, retries, and dead-letters, but cannot observe what happens inside your local database transactions or external payment gateways (like Stripe or Adyen).
+                </p>
+                <p>
+                  For <strong>complete 360° reliability coverage</strong>, real-world systems pair the 3 complementary pillars:
+                </p>
+                <ul class="step-ol mt-2">
+                  <li><strong>1. Application SDK / REST:</strong> Records business steps (<code>ORDER_PLACED</code>, <code>PAYMENT_CAPTURED</code>) with strict idempotency keys.</li>
+                  <li><strong>2. OpenTelemetry Tracing:</strong> Exports distributed spans across microservices to render waterfall trees.</li>
+                  <li><strong>3. Message Broker &amp; Webhooks:</strong> Captures poison pills, dead-lettered queue events, and external payment confirmations.</li>
+                </ul>
+              </div>
+            </div>
+
             <!-- 1. Generate Key -->
             <div class="deploy-code-box mt-3">
               <h3>Step 1: Get Your Workspace API Key</h3>
@@ -1313,50 +1335,128 @@ Content-Type: application/json
 
           <!-- 11. JAVA SDK TAB -->
           <section *ngIf="activeTab() === 'java-sdk'" class="doc-section">
-            <div class="section-badge-top">OFFICIAL SDK</div>
-            <h1>Java SDK Client</h1>
-            <p class="lead">Sample integration using the official Workflow Reliability Lab Java SDK.</p>
-            <pre class="code-block font-mono"><code>import dev.workflowlab.sdk.WorkflowReliabilityClient;
+            <div class="section-badge-top">OFFICIAL SDK (JAVA 17+)</div>
+            <h1>Java SDK Client (Maven / Gradle)</h1>
+            <p class="lead">Thread-safe, high-performance Java client for Spring Boot, Quarkus, and distributed Java microservices.</p>
+
+            <div class="deploy-code-box">
+              <h3>Maven Dependency</h3>
+              <pre class="code-block font-mono"><code>&lt;dependency&gt;
+    &lt;groupId&gt;dev.workflowlab&lt;/groupId&gt;
+    &lt;artifactId&gt;workflow-reliability-sdk&lt;/artifactId&gt;
+    &lt;version&gt;1.0.0&lt;/version&gt;
+&lt;/dependency&gt;</code></pre>
+
+              <h3 class="mt-3">Complete End-to-End Java Example</h3>
+              <pre class="code-block font-mono"><code>import dev.workflowlab.sdk.WorkflowReliabilityClient;
 import dev.workflowlab.sdk.model.EventSubmission;
+import dev.workflowlab.sdk.model.ExecutionSubmission;
+import dev.workflowlab.sdk.model.TraceSubmission;
+import java.util.Map;
+import java.util.UUID;
 
 // 1. Initialize client
 WorkflowReliabilityClient client = WorkflowReliabilityClient.builder()
     .endpoint("http://localhost:8085")
-    .apiKey("wrl_live_8f7b249a0c1e84d6b...")
+    .apiKey("wrl_QWYlStHzvi5ErbhyyfPP88FXbSOAaI1eCydggvVKq3k")
     .workspaceId("4c2dd3fa-5db1-4b8c-949f-ce2f6d169702")
     .build();
 
-// 2. Publish workflow event with idempotency guarantee
-client.publishEvent(EventSubmission.builder()
-    .executionId("exec_order_9912")
-    .eventType("PAYMENT_CAPTURED")
-    .sourceService("checkout-service")
-    .targetService("payment-service")
-    .idempotencyKey("idem_order_9912_capture")
-    .build());</code></pre>
+// 2. Register workflow execution
+String correlationId = "order-saga-" + UUID.randomUUID().toString().substring(0, 8);
+Map&lt;String, Object&gt; execResult = client.createExecution(
+    ExecutionSubmission.builder()
+        .workflowName("Java Order Fulfillment Saga")
+        .environmentId("1129aaad-d15f-4910-b8b3-96c61743c8e8")
+        .correlationId(correlationId)
+        .triggerSource("SPRING_BOOT_CHECKOUT")
+        .inputPayloadMeta(Map.of("amount", 250.00, "currency", "EUR"))
+        .build()
+);
+String executionId = (String) ((Map&lt;String, Object&gt;) execResult.get("data")).get("id");
+
+// 3. Publish lifecycle event with idempotency guarantee
+boolean eventSuccess = client.publishEvent(
+    EventSubmission.builder()
+        .executionId(executionId)
+        .eventType("PAYMENT_CAPTURED")
+        .sourceService("billing-service")
+        .targetService("email-service")
+        .correlationId(correlationId)
+        .idempotencyKey("idem-pay-" + correlationId)
+        .payload(Map.of("invoiceId", "INV-9921", "total", 250.00))
+        .build()
+);
+
+// 4. Ingest OpenTelemetry span
+client.publishSpan(
+    TraceSubmission.builder()
+        .traceId("trace-java-" + UUID.randomUUID().toString().substring(0, 12))
+        .spanId("span-java-root")
+        .serviceName("billing-service")
+        .name("POST /api/invoices")
+        .statusCode("OK")
+        .attributes(Map.of("http.method", "POST", "http.status_code", 200))
+        .build()
+);</code></pre>
+            </div>
           </section>
 
           <!-- 12. PYTHON SDK TAB -->
           <section *ngIf="activeTab() === 'python-sdk'" class="doc-section">
-            <div class="section-badge-top">OFFICIAL SDK</div>
-            <h1>Python SDK Client</h1>
-            <p class="lead">Sample integration using the official Workflow Reliability Lab Python SDK.</p>
-            <pre class="code-block font-mono"><code>from workflow_reliability_lab import WorkflowLabClient
+            <div class="section-badge-top">OFFICIAL SDK (PYTHON 3.8+)</div>
+            <h1>Python SDK Client (Zero External Dependencies)</h1>
+            <p class="lead">Ultra-lightweight, zero-dependency Python client based on Python standard library (urllib.request). Works in serverless Lambdas, Alpine Docker, and scripts without pip install.</p>
 
-# Initialize client
+            <div class="deploy-code-box">
+              <h3>Complete End-to-End Python Example</h3>
+              <pre class="code-block font-mono"><code>import uuid
+from workflow_reliability_lab import WorkflowLabClient
+
+# 1. Initialize client
 client = WorkflowLabClient(
     endpoint="http://localhost:8085",
-    api_key="wrl_live_8f7b249a0c1e84d6b...",
+    api_key="wrl_QWYlStHzvi5ErbhyyfPP88FXbSOAaI1eCydggvVKq3k",
     workspace_id="4c2dd3fa-5db1-4b8c-949f-ce2f6d169702"
 )
 
-# Ingest workflow event
+# 2. Register a new workflow execution
+correlation_id = f"order-saga-&#123;uuid.uuid4().hex[:8]&#125;"
+execution = client.create_execution(
+    workflow_name="E-Commerce Order Fulfillment Saga",
+    environment_id="1129aaad-d15f-4910-b8b3-96c61743c8e8",
+    correlation_id=correlation_id,
+    trigger_source="CHECKOUT_FRONTEND",
+    input_payload_meta=&#123;"cartTotal": 149.99, "currency": "USD"&#125;
+)
+exec_id = execution["id"]
+
+# 3. Ingest lifecycle events into durable journal
 client.publish_event(
-    execution_id="exec_order_9912",
-    event_type="SHIPMENT_DISPATCHED",
-    source_service="shipping-service",
-    idempotency_key="idem_ship_9912"
-)</code></pre>
+    execution_id=exec_id,
+    event_type="PAYMENT_CAPTURED",
+    source_service="order-service",
+    target_service="payment-gateway",
+    correlation_id=correlation_id,
+    idempotency_key=f"idem-pay-&#123;correlation_id&#125;",
+    payload=&#123;"provider": "Stripe", "status": "succeeded"&#125;
+)
+
+# 4. Ingest OpenTelemetry distributed trace spans
+trace_id = f"trace-&#123;uuid.uuid4().hex[:16]&#125;"
+client.publish_span(
+    trace_id=trace_id,
+    span_id="span-root-http",
+    service_name="api-gateway",
+    operation_name="POST /v1/orders",
+    status_code="OK",
+    execution_id=exec_id
+)
+
+# 5. Verify chronological event timeline
+events = client.get_execution_timeline(exec_id)
+print(f"Total events in journal: &#123;len(events)&#125;")</code></pre>
+            </div>
           </section>
 
           <!-- 13. RABBITMQ TAB -->

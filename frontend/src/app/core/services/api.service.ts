@@ -157,6 +157,10 @@ export class ApiService {
     return this.http.get<ApiResponse<InvariantResult[]>>(`${this.baseUrl}/workspaces/${wsId}/executions/${executionId}/invariants`);
   }
 
+  verifyInvariants(wsId: string, executionId: string): Observable<ApiResponse<InvariantResult[]>> {
+    return this.http.post<ApiResponse<InvariantResult[]>>(`${this.baseUrl}/workspaces/${wsId}/executions/${executionId}/verify-invariants`, {});
+  }
+
   getInvariantResults(wsId: string, page = 0, size = 20): Observable<ApiResponse<PageResponse<InvariantResult>>> {
     return this.http.get<ApiResponse<PageResponse<InvariantResult>>>(`${this.baseUrl}/workspaces/${wsId}/invariants/results?page=${page}&size=${size}`);
   }
@@ -185,6 +189,10 @@ export class ApiService {
   // Incidents
   getIncidents(wsId: string, page = 0, size = 20): Observable<ApiResponse<PageResponse<Incident>>> {
     return this.http.get<ApiResponse<PageResponse<Incident>>>(`${this.baseUrl}/workspaces/${wsId}/incidents?page=${page}&size=${size}`);
+  }
+
+  getIncident(wsId: string, incidentId: string): Observable<ApiResponse<Incident>> {
+    return this.http.get<ApiResponse<Incident>>(`${this.baseUrl}/workspaces/${wsId}/incidents/${incidentId}`);
   }
 
   createIncident(wsId: string, data: any): Observable<ApiResponse<Incident>> {

@@ -17,6 +17,9 @@ import { InvariantDefinition, InvariantResult } from '../../core/models/models';
           <p class="subtitle">Mathematical business invariants verified across workflow execution journals</p>
         </div>
         <div class="header-actions">
+          <button class="btn btn-primary" (click)="evaluateLatestExecution()" [disabled]="evaluating()">
+            <span>{{ evaluating() ? 'Evaluating Invariants...' : 'Evaluate Latest Execution' }}</span>
+          </button>
           <button class="btn btn-secondary" (click)="loadInvariantsData()">
             <span>Refresh</span>
           </button>
@@ -77,7 +80,10 @@ import { InvariantDefinition, InvariantResult } from '../../core/models/models';
         </div>
         <ng-template #noResults>
           <div class="empty-state">
-            <p>No invariant results recorded yet. Run workflow executions or failure scenarios to evaluate.</p>
+            <p>No invariant results recorded yet. Run workflow executions or evaluate the latest execution now.</p>
+            <button class="btn btn-primary btn-sm" style="margin-top: 1rem;" (click)="evaluateLatestExecution()" [disabled]="evaluating()">
+              {{ evaluating() ? 'Evaluating...' : 'Evaluate Latest Execution Now' }}
+            </button>
           </div>
         </ng-template>
       </div>
@@ -188,6 +194,7 @@ export class InvariantsComponent implements OnInit {
 
   definitions = signal<InvariantDefinition[]>([]);
   results = signal<InvariantResult[]>([]);
+  evaluating = signal<boolean>(false);
 
   constructor() {
     effect(() => {
@@ -219,6 +226,30 @@ export class InvariantsComponent implements OnInit {
       if (res.success && res.data) {
         this.results.set(res.data.content);
       }
+    });
+  }
+
+  evaluateLatestExecution() {
+    const ws = this.workspaceService.currentWorkspace();
+    if (!ws) return;
+
+    this.evaluating.set(true);
+    this.api.getExecutions(ws.id, { page: 0, size: 1 }).subscribe({
+      next: (res: any) => {
+        if (res.success && res.data && res.data.content.length > 0) {
+          const execId = res.data.content[0].id;
+          this.api.verifyInvariants(ws.id, execId).subscribe({
+            next: () => {
+              this.evaluating.set(false);
+              this.loadInvariantsData();
+            },
+            error: () => this.evaluating.set(false)
+          });
+        } else {
+          this.evaluating.set(false);
+        }
+      },
+      error: () => this.evaluating.set(false)
     });
   }
 }

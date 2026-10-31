@@ -1,6 +1,6 @@
 package dev.workflowlab.sdk.model;
 
-import java.time.Instant;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 
 public class TraceSubmission {
@@ -12,7 +12,7 @@ public class TraceSubmission {
     private Long startTimeUs;
     private Long endTimeUs;
     private String statusCode;
-    private Map<String, Object> attributes;
+    private String attributes;
 
     public TraceSubmission() {}
 
@@ -44,10 +44,11 @@ public class TraceSubmission {
     public String getStatusCode() { return statusCode; }
     public void setStatusCode(String statusCode) { this.statusCode = statusCode; }
 
-    public Map<String, Object> getAttributes() { return attributes; }
-    public void setAttributes(Map<String, Object> attributes) { this.attributes = attributes; }
+    public String getAttributes() { return attributes; }
+    public void setAttributes(String attributes) { this.attributes = attributes; }
 
     public static class Builder {
+        private static final ObjectMapper MAPPER = new ObjectMapper();
         private final TraceSubmission submission = new TraceSubmission();
 
         public Builder traceId(String traceId) {
@@ -90,8 +91,17 @@ public class TraceSubmission {
             return this;
         }
 
-        public Builder attributes(Map<String, Object> attributes) {
+        public Builder attributes(String attributes) {
             submission.attributes = attributes;
+            return this;
+        }
+
+        public Builder attributes(Map<String, Object> attributes) {
+            try {
+                submission.attributes = MAPPER.writeValueAsString(attributes);
+            } catch (Exception e) {
+                submission.attributes = attributes.toString();
+            }
             return this;
         }
 

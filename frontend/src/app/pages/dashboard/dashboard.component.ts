@@ -488,14 +488,31 @@ export class DashboardComponent implements OnInit {
   triggerQuickScenario(scenarioId: string) {
     const ws = this.workspaceService.currentWorkspace();
     if (!ws) return;
-    const envs = this.workspaceService.projects()[0]?.environments;
-    const simEnv = envs?.find(e => e.type === 'SIMULATION') || envs?.[0];
-    const envId = simEnv ? simEnv.id : '00000000-0000-0000-0000-000000000000';
 
-    this.api.runScenario(ws.id, scenarioId, envId).subscribe({
-      next: () => {
-        this.refresh();
-      }
-    });
+    const projects = this.workspaceService.projects();
+    let envId: string | null = null;
+    if (projects.length > 0 && projects[0].environments && projects[0].environments.length > 0) {
+      const envs = projects[0].environments;
+      const simEnv = envs.find(e => (e.environmentType || e.type) === 'SIMULATION') || envs[0];
+      if (simEnv) envId = simEnv.id;
+    }
+
+    const execute = (targetEnvId: string) => {
+      this.api.runScenario(ws.id, scenarioId, targetEnvId).subscribe({
+        next: () => {
+          this.refresh();
+        }
+      });
+    };
+
+    if (envId) {
+      execute(envId);
+    } else {
+      this.api.getProjects(ws.id).subscribe(res => {
+        const envs = res.data?.[0]?.environments;
+        const simEnv = envs?.find((e: any) => (e.environmentType || e.type) === 'SIMULATION') || envs?.[0];
+        execute(simEnv ? simEnv.id : '00000000-0000-0000-0000-000000000000');
+      });
+    }
   }
 }

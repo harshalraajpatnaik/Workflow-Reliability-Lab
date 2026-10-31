@@ -104,8 +104,8 @@ import {
                 <span class="text-xs text-muted">Idempotency Key:</span>
                 <code class="font-mono text-xs text-cyan">{{ ev.idempotencyKey }}</code>
               </div>
-              <div class="ev-payload" *ngIf="ev.payload">
-                <pre class="payload-box font-mono text-xs"><code>{{ ev.payload }}</code></pre>
+              <div class="ev-payload" *ngIf="ev.payload || ev.payloadMetadata">
+                <pre class="payload-box font-mono text-xs"><code>{{ ev.payload || ev.payloadMetadata }}</code></pre>
               </div>
             </div>
           </div>

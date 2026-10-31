@@ -1,5 +1,6 @@
 package dev.workflowlab.sdk.model;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 
 public class EventSubmission {
@@ -10,7 +11,7 @@ public class EventSubmission {
     private String correlationId;
     private String idempotencyKey;
     private Integer sequenceNumber;
-    private Map<String, Object> payload;
+    private String payload;
 
     public EventSubmission() {}
 
@@ -39,10 +40,11 @@ public class EventSubmission {
     public Integer getSequenceNumber() { return sequenceNumber; }
     public void setSequenceNumber(Integer sequenceNumber) { this.sequenceNumber = sequenceNumber; }
 
-    public Map<String, Object> getPayload() { return payload; }
-    public void setPayload(Map<String, Object> payload) { this.payload = payload; }
+    public String getPayload() { return payload; }
+    public void setPayload(String payload) { this.payload = payload; }
 
     public static class Builder {
+        private static final ObjectMapper MAPPER = new ObjectMapper();
         private final EventSubmission submission = new EventSubmission();
 
         public Builder executionId(String executionId) {
@@ -80,8 +82,17 @@ public class EventSubmission {
             return this;
         }
 
-        public Builder payload(Map<String, Object> payload) {
+        public Builder payload(String payload) {
             submission.payload = payload;
+            return this;
+        }
+
+        public Builder payload(Map<String, Object> map) {
+            try {
+                submission.payload = MAPPER.writeValueAsString(map);
+            } catch (Exception e) {
+                submission.payload = map.toString();
+            }
             return this;
         }
 

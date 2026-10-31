@@ -310,23 +310,38 @@ export class ScenariosComponent implements OnInit {
     const ws = this.workspaceService.currentWorkspace();
     if (!ws) return;
 
-    const envs = this.workspaceService.projects()[0]?.environments;
-    const simEnv = envs?.find(e => e.type === 'SIMULATION') || envs?.[0];
-    const envId = simEnv ? simEnv.id : '00000000-0000-0000-0000-000000000000';
+    const projects = this.workspaceService.projects();
+    let envId: string | null = null;
+    if (projects.length > 0 && projects[0].environments && projects[0].environments.length > 0) {
+      const envs = projects[0].environments;
+      const simEnv = envs.find(e => (e.environmentType || e.type) === 'SIMULATION') || envs[0];
+      if (simEnv) envId = simEnv.id;
+    }
 
-    this.runningId.set(scenarioCode);
-
-    this.api.runScenario(ws.id, scenarioCode, envId).subscribe({
-      next: (res) => {
-        this.runningId.set(null);
-        if (res.success && res.data) {
-          this.lastRun.set(res.data);
-          this.loadScenariosAndRuns();
+    const execute = (targetEnvId: string) => {
+      this.runningId.set(scenarioCode);
+      this.api.runScenario(ws.id, scenarioCode, targetEnvId).subscribe({
+        next: (res) => {
+          this.runningId.set(null);
+          if (res.success && res.data) {
+            this.lastRun.set(res.data);
+            this.loadScenariosAndRuns();
+          }
+        },
+        error: () => {
+          this.runningId.set(null);
         }
-      },
-      error: () => {
-        this.runningId.set(null);
-      }
-    });
+      });
+    };
+
+    if (envId) {
+      execute(envId);
+    } else {
+      this.api.getProjects(ws.id).subscribe(res => {
+        const envs = res.data?.[0]?.environments;
+        const simEnv = envs?.find((e: any) => (e.environmentType || e.type) === 'SIMULATION') || envs?.[0];
+        execute(simEnv ? simEnv.id : '00000000-0000-0000-0000-000000000000');
+      });
+    }
   }
 }

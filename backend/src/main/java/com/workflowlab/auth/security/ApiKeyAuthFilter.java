@@ -31,6 +31,12 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         throws ServletException, IOException {
 
         String apiKeyHeader = request.getHeader("X-API-Key");
+        if ((apiKeyHeader == null || apiKeyHeader.isBlank())) {
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader != null && authHeader.regionMatches(true, 0, "Bearer wrl_", 0, 11)) {
+                apiKeyHeader = authHeader.substring(7).trim();
+            }
+        }
         if (apiKeyHeader != null && !apiKeyHeader.isBlank() && SecurityContextHolder.getContext().getAuthentication() == null) {
             String keyHash = tokenService.hashToken(apiKeyHeader.trim());
             Optional<ApiKey> apiKeyOpt = apiKeyRepository.findByKeyHash(keyHash);

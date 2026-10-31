@@ -23,9 +23,9 @@ import { AuthService } from '../../core/services/auth.service';
             <span class="brand-name">Workflow Reliability Lab</span>
           </div>
           <nav class="header-nav">
-            <a href="#pillars">Capabilities</a>
-            <a href="#scenarios">Scenarios</a>
-            <a href="#invariants">Invariants</a>
+            <a href="#pillars" (click)="scrollTo('pillars', $event)">Capabilities</a>
+            <a href="#scenarios" (click)="scrollTo('scenarios', $event)">Scenarios</a>
+            <a href="#invariants" (click)="scrollTo('invariants', $event)">Invariants</a>
             <a routerLink="/docs">Docs</a>
             <a href="http://localhost:8085/swagger-ui/index.html" target="_blank">OpenAPI</a>
           </nav>
@@ -704,4 +704,12 @@ import { AuthService } from '../../core/services/auth.service';
     }
   `]
 })
-export class LandingComponent {}
+export class LandingComponent {
+  scrollTo(id: string, event?: Event) {
+    if (event) event.preventDefault();
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+}

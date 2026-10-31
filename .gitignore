@@ -41,3 +41,11 @@ Thumbs.db
 
 # Docker
 docker-data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+

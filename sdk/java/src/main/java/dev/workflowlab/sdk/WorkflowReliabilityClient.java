@@ -1,8 +1,10 @@
 package dev.workflowlab.sdk;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.workflowlab.sdk.model.EventSubmission;
+import dev.workflowlab.sdk.model.ExecutionSubmission;
 import dev.workflowlab.sdk.model.TraceSubmission;
 
 import java.io.IOException;
@@ -11,6 +13,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Map;
 
 public class WorkflowReliabilityClient {
     private final String endpoint;
@@ -24,7 +27,7 @@ public class WorkflowReliabilityClient {
         this.apiKey = builder.apiKey;
         this.workspaceId = builder.workspaceId;
         this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
+                .connectTimeout(Duration.ofSeconds(15))
                 .build();
         this.objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
     }
@@ -34,7 +37,30 @@ public class WorkflowReliabilityClient {
     }
 
     /**
-     * Ingests a workflow event into the durable event journal.
+     * Registers a new workflow execution in the workspace.
+     */
+    public Map<String, Object> createExecution(ExecutionSubmission execution) throws IOException, InterruptedException {
+        String url = String.format("%s/api/v1/workspaces/%s/executions", endpoint, workspaceId);
+        String body = objectMapper.writeValueAsString(execution);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Content-Type", "application/json")
+                .header("X-API-Key", apiKey)
+                .header("Authorization", "Bearer " + apiKey)
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .timeout(Duration.ofSeconds(15))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 400) {
+            throw new RuntimeException("Create execution failed (HTTP " + response.statusCode() + "): " + response.body());
+        }
+        return objectMapper.readValue(response.body(), new TypeReference<Map<String, Object>>() {});
+    }
+
+    /**
+     * Ingests a workflow event into the durable event journal with idempotency enforcement.
      */
     public boolean publishEvent(EventSubmission event) throws IOException, InterruptedException {
         String url = String.format("%s/api/v1/workspaces/%s/events", endpoint, workspaceId);
@@ -44,8 +70,9 @@ public class WorkflowReliabilityClient {
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json")
                 .header("X-API-Key", apiKey)
+                .header("Authorization", "Bearer " + apiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(body))
-                .timeout(Duration.ofSeconds(10))
+                .timeout(Duration.ofSeconds(15))
                 .build();
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -63,12 +90,36 @@ public class WorkflowReliabilityClient {
                 .uri(URI.create(url))
                 .header("Content-Type", "application/json")
                 .header("X-API-Key", apiKey)
+                .header("Authorization", "Bearer " + apiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(body))
-                .timeout(Duration.ofSeconds(10))
+                .timeout(Duration.ofSeconds(15))
                 .build();
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
         return response.statusCode() >= 200 && response.statusCode() < 300;
+    }
+
+    /**
+     * Triggers a controlled failure scenario simulation.
+     */
+    public Map<String, Object> runScenario(String scenarioCode, String environmentId) throws IOException, InterruptedException {
+        String url = String.format("%s/api/v1/workspaces/%s/scenarios/%s/run", endpoint, workspaceId, scenarioCode);
+        String body = objectMapper.writeValueAsString(Map.of("environmentId", environmentId));
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Content-Type", "application/json")
+                .header("X-API-Key", apiKey)
+                .header("Authorization", "Bearer " + apiKey)
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .timeout(Duration.ofSeconds(20))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 400) {
+            throw new RuntimeException("Scenario run failed (HTTP " + response.statusCode() + "): " + response.body());
+        }
+        return objectMapper.readValue(response.body(), new TypeReference<Map<String, Object>>() {});
     }
 
     public static class Builder {
