@@ -37,8 +37,8 @@ import { Webhook } from '../../core/models/models';
             <tbody>
               <tr *ngFor="let wh of webhooks()">
                 <td>
-                  <span class="badge" [ngClass]="wh.active ? 'badge-success' : 'badge-warning'">
-                    {{ wh.active ? 'ACTIVE' : 'DISABLED' }}
+                  <span class="badge" [ngClass]="(wh.enabled ?? wh.active) ? 'badge-success' : 'badge-warning'">
+                    {{ (wh.enabled ?? wh.active) ? 'ACTIVE' : 'DISABLED' }}
                   </span>
                 </td>
                 <td class="font-mono text-cyan">{{ wh.url }}</td>
@@ -255,8 +255,9 @@ export class WebhooksComponent implements OnInit {
     this.loading.set(true);
     const data = {
       url: this.newUrl,
-      secret: this.newSecret || undefined,
-      eventTypes: this.newEvents
+      description: 'Workspace Notifications & Alerts',
+      eventTypes: this.newEvents,
+      enabled: true
     };
 
     this.api.registerWebhook(ws.id, data).subscribe({

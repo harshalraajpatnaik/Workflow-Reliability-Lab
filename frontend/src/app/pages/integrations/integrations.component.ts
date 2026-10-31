@@ -288,7 +288,7 @@ export class IntegrationsComponent implements OnInit {
   loadIntegrations(wsId: string) {
     this.api.getIntegrations(wsId).subscribe(res => {
       if (res.success && res.data) {
-        const rmq = res.data.find(i => i.type === 'RABBITMQ');
+        const rmq = res.data.find(i => (i.integrationType || i.type) === 'RABBITMQ');
         if (rmq) {
           this.rabbitStatus.set(rmq.status);
         }
@@ -314,8 +314,10 @@ export class IntegrationsComponent implements OnInit {
     this.api.testRabbitMqConnection(ws.id, testPayload).subscribe({
       next: (res) => {
         this.testingConnection.set(false);
-        this.testSuccess.set(res.success);
-        this.testResult.set(res.message || 'RabbitMQ TCP socket handshake succeeded!');
+        const isConnected = res.data ? res.data.success : res.success;
+        this.testSuccess.set(isConnected);
+        const latency = res.data?.latencyMs != null ? ` (${res.data.latencyMs}ms)` : '';
+        this.testResult.set((res.data?.message || res.message || 'RabbitMQ TCP socket handshake succeeded!') + latency);
       },
       error: (err) => {
         this.testingConnection.set(false);
