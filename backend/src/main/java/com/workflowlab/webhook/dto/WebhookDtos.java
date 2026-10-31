@@ -15,8 +15,13 @@ public final class WebhookDtos {
 
         String description,
         String eventTypes,
-        boolean enabled
-    ) {}
+        boolean enabled,
+        String secret
+    ) {
+        public RegisterWebhookRequest(String url, String description, String eventTypes, boolean enabled) {
+            this(url, description, eventTypes, enabled, null);
+        }
+    }
 
     public record WebhookDto(
         UUID id,

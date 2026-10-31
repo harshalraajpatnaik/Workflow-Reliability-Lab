@@ -33,9 +33,14 @@ public class WebhookService {
 
     @Transactional
     public WebhookDto registerWebhook(UUID workspaceId, RegisterWebhookRequest request) {
-        byte[] secretBytes = new byte[32];
-        secureRandom.nextBytes(secretBytes);
-        String secret = "whsec_" + Base64.getUrlEncoder().withoutPadding().encodeToString(secretBytes);
+        String secret;
+        if (request.secret() != null && !request.secret().isBlank()) {
+            secret = request.secret().trim();
+        } else {
+            byte[] secretBytes = new byte[32];
+            secureRandom.nextBytes(secretBytes);
+            secret = "whsec_" + Base64.getUrlEncoder().withoutPadding().encodeToString(secretBytes);
+        }
 
         String eventTypesJson = formatEventTypesJson(request.eventTypes());
 
