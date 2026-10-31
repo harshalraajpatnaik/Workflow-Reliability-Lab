@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterLink, ActivatedRoute } from '@angular/router';
 
 type DocTab = 
+  | 'e2e-flow'
   | 'portal-guide'
   | 'walkthrough'
   | 'connections'
@@ -55,6 +56,9 @@ type DocTab =
         <aside class="docs-sidebar">
           <div class="docs-nav-group">
             <span class="group-title">NOVICE PLATFORM GUIDE</span>
+            <button class="nav-btn" [class.active]="activeTab() === 'e2e-flow'" (click)="setTab('e2e-flow')">
+              <span class="tab-icon">⚡</span> End-to-End Setup Flow
+            </button>
             <button class="nav-btn" [class.active]="activeTab() === 'portal-guide'" (click)="setTab('portal-guide')">
               <span class="tab-icon">🧭</span> The "Why, What, How"
             </button>
@@ -121,6 +125,320 @@ type DocTab =
         <!-- Docs Content -->
         <main class="docs-content">
 
+          <!-- 0. COMPLETE END-TO-END SETUP FLOW (FROM ZERO TO FULL OBSERVABILITY) -->
+          <section *ngIf="activeTab() === 'e2e-flow'" class="doc-section">
+            <div class="section-badge-top">COMPLETE END-TO-END RUNBOOK</div>
+            <h1>Complete End-to-End Setup Flow: From Zero to Full Observability</h1>
+            <p class="lead">
+              A comprehensive, beginner-friendly operational guide detailing what to setup, what to connect, how telemetry flows into WRL, and how every payment, event, and background worker gets audited and verified.
+            </p>
+
+            <!-- Complete Architecture ASCII Box -->
+            <div class="guide-card solution-card">
+              <div class="card-icon cyan-glow">🏛️</div>
+              <div class="card-body">
+                <h3>End-to-End Data Ingestion &amp; Reliability Mesh</h3>
+                <pre class="workflow-flow-diagram font-mono text-xs"><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│                       END-TO-END DATA INGESTION FLOW                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                                                               
+   [Your Microservices]                [Message Broker]        [Payment Provider]
+ (Java / Python / Node / Go)           (Kafka / RabbitMQ)       (Stripe / Adyen) 
+             │                                 │                        │        
+             │ 1. SDK / REST Events            │ 2. Queue DLQ &amp; Events  │ 3. Webhook Events
+             │ (Idempotent Lifecycle)          │ (Consumer Dead-Letters)│ (Signature Verified)
+             ▼                                 ▼                        ▼        
+ ┌─────────────────────────────────────────────────────────────────────────────┐
+ │               Workflow Reliability Lab Ingestion Engine                     │
+ │                     (Port 8085 / HTTPS Reverse Proxy)                       │
+ ├─────────────────────────────────────────────────────────────────────────────┤
+ │ • ApiKey / JWT Auth Filter &amp; Workspace Tenant Isolation                     │
+ │ • Memory &amp; Postgres Deduplication Cache (Idempotency Key Check)             │
+ │ • Execution Journey Correlator (Stitches Traces, Spans &amp; Events)            │
+ ├─────────────────────────────────────────────────────────────────────────────┤
+ │                      DETERMINISTIC EVALUATION PIPELINE                      │
+ │                                                                             │
+ │ 1. Invariant Engine           2. Anomaly Detector      3. Financial Ledger  │
+ │    • 8 Mathematical Rules        • Missing Steps          • Double-Entry    │
+ │    • State Machine Asserts       • Socket Timeouts        • Reconciliation  │
+ │    • Zero-Tolerance Violations   • Out-of-Order Events    • Excess Refunds  │
+ ├─────────────────────────────────────────────────────────────────────────────┤
+ │                          STORAGE &amp; AUDIT LAYER                              │
+ │  • PostgreSQL 16 (Durable Append-Only Journal &amp; JSONB Evidence Store)       │
+ │  • Security Audit Logger (Immutable User &amp; System Operations)               │
+ ├─────────────────────────────────────────────────────────────────────────────┤
+ │                          OBSERVABILITY CONSOLE                              │
+ │  • Angular 22 SPA Dashboard (Port 4200 / Production Static Web App)         │
+ │  • Real-Time Waterfall, Incident Manager &amp; AI Postmortem Diagnosis         │
+ └─────────────────────────────────────────────────────────────────────────────┘</code></pre>
+              </div>
+            </div>
+
+            <!-- The 7 Sequential Steps -->
+            <!-- Step 1: Workspace & Team -->
+            <div class="deploy-code-box mt-3">
+              <span class="badge badge-info">STEP 1</span>
+              <h3 class="mt-2">Workspace Creation &amp; Team Onboarding</h3>
+              <p>Workspaces provide strict multi-tenant isolation. All API keys, environments, executions, and audit records belong to your workspace.</p>
+              <ul class="step-ol">
+                <li>Navigate to <strong>Team Members &amp; Roles</strong> (<code>/workspace/team</code>).</li>
+                <li>Click <strong>+ Invite Team Member</strong> and assign roles:
+                  <ul>
+                    <li><strong>ADMIN:</strong> Manage workspace, keys, webhooks, and disaster simulations.</li>
+                    <li><strong>DEVELOPER:</strong> Ingest telemetry, run chaos experiments, declare incidents, assert invariants.</li>
+                    <li><strong>VIEWER:</strong> Read-only access to dashboards, trace waterfalls, and postmortem reports.</li>
+                  </ul>
+                </li>
+                <li><em>Auto-Provisioning:</em> If an invited engineer hasn't registered yet, WRL automatically creates a secure account with a random BCrypt hash.</li>
+              </ul>
+            </div>
+
+            <!-- Step 2: Projects & Environments -->
+            <div class="deploy-code-box mt-3">
+              <span class="badge badge-info">STEP 2</span>
+              <h3 class="mt-2">Projects &amp; Environments Architecture</h3>
+              <p>Real-world architectures separate traffic across deployment stages. WRL models this natively:</p>
+              <ul class="step-ol">
+                <li><strong>DEVELOPMENT:</strong> Feature branch testing and local developer runs.</li>
+                <li><strong>STAGING:</strong> Pre-release integration environment.</li>
+                <li><strong>SIMULATION:</strong> Chaos experiments and fault-injection lab.</li>
+                <li><strong>PRODUCTION:</strong> Live customer traffic telemetry and real-time invariant monitoring.</li>
+                <li>On the <strong>Executions Explorer</strong> (<code>/workspace/executions</code>), filter executions specifically by environment to isolate production anomalies from chaos tests.</li>
+              </ul>
+            </div>
+
+            <!-- Step 3: API Keys -->
+            <div class="deploy-code-box mt-3">
+              <span class="badge badge-info">STEP 3</span>
+              <h3 class="mt-2">Machine Authentication &amp; API Key Creation</h3>
+              <p>Applications, microservices, and CI/CD pipelines authenticate with machine tokens prefixed with <code>wrl_</code>.</p>
+              <ul class="step-ol">
+                <li>Navigate to <strong>API Keys</strong> (<code>/workspace/api-keys</code>) and click <strong>Generate New Key</strong>.</li>
+                <li>Select granular scopes: <code>events:write</code>, <code>traces:write</code>, <code>executions:read</code>, <code>scenarios:run</code>.</li>
+                <li><strong>Single-View Security:</strong> Raw keys are shown only once. The database stores only an irreversible SHA-256 hash.</li>
+                <li>Authenticate using either <code>X-API-Key: wrl_...</code> or standard <code>Authorization: Bearer wrl_...</code>.</li>
+              </ul>
+            </div>
+
+            <!-- Step 4: Connecting the 3 Pillars -->
+            <div class="deploy-code-box mt-3">
+              <span class="badge badge-info">STEP 4</span>
+              <h3 class="mt-2">Connecting Data Sources (What to Connect &amp; How Data Flows In)</h3>
+              
+              <div class="guide-card trap-card">
+                <div class="card-icon cyan-glow">💡</div>
+                <div class="card-body">
+                  <h4>Is Connecting a Message Broker Alone Sufficient?</h4>
+                  <p><strong>No single component works in isolation.</strong> If you only configure a message broker, WRL intercepts queue messages and dead-letters, but cannot observe what happens inside your database transactions, application memory, or third-party gateways (e.g. Stripe). For 360° reliability, connect the 3 complementary pillars:</p>
+                </div>
+              </div>
+
+              <h4 class="mt-3">Pillar A: Official Python SDK (Zero External Dependencies)</h4>
+              <p>Works in serverless AWS Lambda, Alpine containers, and scripts without <code>pip install</code>:</p>
+              <pre class="code-block font-mono"><code>from workflow_reliability_lab import WorkflowLabClient
+
+client = WorkflowLabClient(
+    endpoint="http://localhost:8085",
+    api_key="wrl_YOUR_KEY",
+    workspace_id="YOUR_WORKSPACE_ID"
+)
+
+# 1. Register execution
+execution = client.create_execution(
+    workflow_name="Order Fulfillment Saga",
+    environment_id="YOUR_PROD_ENV_ID",
+    correlation_id="order-882194",
+    trigger_source="CHECKOUT_FRONTEND"
+)
+
+# 2. Ingest lifecycle event with idempotency guarantee
+client.publish_event(
+    execution_id=execution["id"],
+    event_type="PAYMENT_CAPTURED",
+    source_service="checkout-service",
+    target_service="payment-gateway",
+    idempotency_key="idem-pay-882194",
+    payload=&#123;"amount": 149.99, "currency": "USD", "provider": "Stripe"&#125;
+)
+
+# 3. Publish OpenTelemetry distributed trace span
+client.publish_span(
+    trace_id="trace-882194",
+    span_id="span-root-checkout",
+    service_name="checkout-api",
+    operation_name="POST /v1/checkout",
+    status_code="OK",
+    execution_id=execution["id"]
+)</code></pre>
+
+              <h4 class="mt-3">Pillar B: Official Java SDK (Java 17+, Maven / Gradle)</h4>
+              <p>Thread-safe client for Spring Boot, Quarkus, and Micronaut microservices:</p>
+              <pre class="code-block font-mono"><code>WorkflowReliabilityClient client = WorkflowReliabilityClient.builder()
+    .endpoint("http://localhost:8085")
+    .apiKey("wrl_YOUR_KEY")
+    .workspaceId("YOUR_WORKSPACE_ID")
+    .build();
+
+// Register execution
+Map&lt;String, Object&gt; exec = client.createExecution(
+    ExecutionSubmission.builder()
+        .workflowName("Java Order Saga")
+        .environmentId("YOUR_PROD_ENV_ID")
+        .correlationId("order-java-001")
+        .build()
+);
+String executionId = (String) ((Map&lt;String, Object&gt;) exec.get("data")).get("id");
+
+// Publish idempotent event
+client.publishEvent(
+    EventSubmission.builder()
+        .executionId(executionId)
+        .eventType("INVOICE_GENERATED")
+        .sourceService("billing-service")
+        .idempotencyKey("idem-inv-001")
+        .payload(Map.of("total", 149.99))
+        .build()
+);</code></pre>
+
+              <h4 class="mt-3">Pillar C: OpenTelemetry Collector OTLP HTTP Exporter</h4>
+              <pre class="code-block font-mono"><code>exporters:
+  otlphttp/workflowlab:
+    endpoint: "http://localhost:8085/api/v1/workspaces/YOUR_WORKSPACE_ID/traces"
+    headers:
+      X-API-Key: "wrl_YOUR_KEY"</code></pre>
+
+              <h4 class="mt-3">Pillar D: Message Broker Integration (RabbitMQ)</h4>
+              <p>Configure credentials in <strong>Integration Architecture</strong> (<code>/workspace/integrations</code>). WRL captures queue transport metrics, dead-lettered poison pills, and consumer redeliveries.</p>
+            </div>
+
+            <!-- Step 5: How Ingestion & Rule Evaluation Works -->
+            <div class="deploy-code-box mt-3">
+              <span class="badge badge-info">STEP 5</span>
+              <h3 class="mt-2">Runtime Ingestion &amp; Deterministic Rule Evaluation</h3>
+              <p>When telemetry enters WRL, it passes through a 4-stage evaluation pipeline:</p>
+              <ul class="step-ol">
+                <li><strong>1. Idempotency Gate:</strong> Checks <code>(executionId, idempotencyKey)</code>. Duplicates are acknowledged without triggering redundant side-effects.</li>
+                <li><strong>2. Correlation Stitching:</strong> Stitches events and spans into a single execution journey.</li>
+                <li><strong>3. 8 Formal Business Invariants:</strong> Evaluates zero-tolerance rules (No double charge, refund limits, terminal state immutability, compensation logging, ledger balancing).</li>
+                <li><strong>4. 5 Anomaly Detectors:</strong> Flags dropped steps, socket timeouts (&gt;5000ms), out-of-order sequence arrivals, redelivery storms, and retry cascades.</li>
+              </ul>
+            </div>
+
+            <!-- Step 6: Step-by-Step Operator Guide -->
+            <div class="deploy-code-box mt-3">
+              <span class="badge badge-info">STEP 6</span>
+              <h3 class="mt-2">Step-by-Step Operator Guide (Portal Tour)</h3>
+              <table class="data-table font-mono text-xs mt-2">
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>URL Path</th>
+                    <th>What You Do Here</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="font-bold">Executive Dashboard</td>
+                    <td>/workspace/dashboard</td>
+                    <td>Track reliability rate (e.g. 94.2%), active anomalies, recent executions, and quick simulate chaos.</td>
+                  </tr>
+                  <tr>
+                    <td class="font-bold">Executions Explorer</td>
+                    <td>/workspace/executions</td>
+                    <td>Filter workflows by Environment, Status, or Correlation ID. Inspect execution duration and errors.</td>
+                  </tr>
+                  <tr>
+                    <td class="font-bold">Execution Detail</td>
+                    <td>/workspace/executions/:id</td>
+                    <td>View chronological event journals, OpenTelemetry waterfall trees, and linked anomalies.</td>
+                  </tr>
+                  <tr>
+                    <td class="font-bold">Deterministic Invariants</td>
+                    <td>/workspace/invariants</td>
+                    <td>Review all 8 mathematical business rules, active status, and evaluate the latest execution with 1 click.</td>
+                  </tr>
+                  <tr>
+                    <td class="font-bold">Failure Simulation Lab</td>
+                    <td>/workspace/scenarios</td>
+                    <td>Execute 15 controlled chaos scenarios (network timeouts, worker crashes, pool exhaustion) to test resilience.</td>
+                  </tr>
+                  <tr>
+                    <td class="font-bold">Anomaly Detection Lab</td>
+                    <td>/workspace/anomalies</td>
+                    <td>Review detected anomalies, inspect JSON evidence, and click Acknowledge to mark investigated.</td>
+                  </tr>
+                  <tr>
+                    <td class="font-bold">Payment Reliability</td>
+                    <td>/workspace/payments</td>
+                    <td>Test payment authorizations, captures, and refunds. Trigger excess refunds to observe invariant rejection.</td>
+                  </tr>
+                  <tr>
+                    <td class="font-bold">Incident Investigation</td>
+                    <td>/workspace/incidents</td>
+                    <td>Declare an incident, click 🤖 Request AI Diagnosis for root cause analysis, and 📄 Generate Postmortem.</td>
+                  </tr>
+                  <tr>
+                    <td class="font-bold">Integrations Architecture</td>
+                    <td>/workspace/integrations</td>
+                    <td>Configure and test RabbitMQ broker connections and OpenTelemetry OTLP collector endpoints.</td>
+                  </tr>
+                  <tr>
+                    <td class="font-bold">API Keys &amp; Tokens</td>
+                    <td>/workspace/api-keys</td>
+                    <td>Generate scoped wrl_... keys for SDKs and CI/CD pipelines. Revoke compromised keys instantly.</td>
+                  </tr>
+                  <tr>
+                    <td class="font-bold">Outgoing Webhooks</td>
+                    <td>/workspace/webhooks</td>
+                    <td>Register Slack / PagerDuty webhook endpoints to broadcast anomaly and incident alerts.</td>
+                  </tr>
+                  <tr>
+                    <td class="font-bold">Team &amp; Roles</td>
+                    <td>/workspace/team</td>
+                    <td>Invite engineers by email and assign roles (ADMIN, DEVELOPER, VIEWER).</td>
+                  </tr>
+                  <tr>
+                    <td class="font-bold">Security Audit History</td>
+                    <td>/workspace/audit</td>
+                    <td>Review immutable compliance audit records for logins, key generation, simulations, and role changes.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Step 7: CI/CD Quality Gating -->
+            <div class="deploy-code-box mt-3">
+              <span class="badge badge-info">STEP 7</span>
+              <h3 class="mt-2">CI/CD Quality Gating &amp; Pre-Release Chaos Testing</h3>
+              <p>Block regressions before merging to production by executing failure scenarios in GitHub Actions:</p>
+              <pre class="code-block font-mono"><code>name: Reliability &amp; Chaos Quality Gate
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  reliability-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Downstream Network Timeout Chaos Simulation
+        run: |
+          RESPONSE=$(curl -s -X POST "http://localhost:8085/api/v1/workspaces/YOUR_WS_ID/scenarios/SCEN_NET_TIMEOUT/run" \
+            -H "X-API-Key: wrl_YOUR_API_KEY_HERE" \
+            -H "Content-Type: application/json" \
+            -d '&#123;"environmentId": "YOUR_SIMULATION_ENV_ID"&#125;')
+          
+          PASSED=$(echo $RESPONSE | jq -r '.data.passedInvariants')
+          if [ "$PASSED" != "true" ]; then
+            echo "Reliability gate failed: Invariants violated under chaos!"
+            exit 1
+          fi
+          echo "Reliability gate passed: All formal invariants preserved under fault injection."</code></pre>
+            </div>
+          </section>
+
           <!-- 1. PORTAL GUIDE TAB (THE WHY, WHAT, HOW) -->
           <section *ngIf="activeTab() === 'portal-guide'" class="doc-section">
             <div class="section-badge-top">NOVICE PLATFORM GUIDE</div>
@@ -128,6 +446,17 @@ type DocTab =
             <p class="lead">
               Everything you need to know about distributed system reliability, why modern asynchronous systems fail silently, and how this platform guarantees correctness.
             </p>
+
+            <!-- Quick Jump to E2E Flow Banner -->
+            <div class="live-run-banner mb-3" style="cursor: pointer;" (click)="setTab('e2e-flow')">
+              <div class="banner-left">
+                <span class="badge badge-info">OPERATIONAL RUNBOOK</span>
+                <span class="font-bold">Looking for the step-by-step setup guide &amp; data connection flow?</span>
+              </div>
+              <div class="banner-right">
+                <button class="btn btn-primary btn-sm">View End-to-End Setup Flow ➔</button>
+              </div>
+            </div>
 
             <!-- The Problem Card -->
             <div class="guide-card trap-card">
